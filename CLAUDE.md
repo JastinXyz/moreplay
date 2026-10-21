@@ -28,6 +28,8 @@ digging through git history. If a doc says something the code no longer does, fi
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
+  `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only.
+- `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands
 
@@ -44,10 +46,15 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
 ## Working rules
 
 - **Work through PRs.** Branch from `main` (`feat/...`, `fix/...`, `docs/...`, `chore/...`),
-  open a PR with `gh pr create`, and let the owner review. Do not push to `main` directly.
+  open a PR with `gh pr create` using the template, and **stop**. The owner reviews and
+  merges; start the next PR only after the previous one is merged (branch from fresh `main`).
+  Never push to `main` directly and never merge a PR yourself.
 - Conventional Commits, English. No AI attribution anywhere (no Co-Authored-By trailer, no
-  "Generated with" footer).
-- **The test device is the owner's personal phone.** Ask before touching it. Never tap near
+  "Generated with" footer). Git identity is the repo's configured `JastinXyz`.
+- CI (`.github/workflows/ci.yml`) runs `npm run build` on every PR; keep it green.
+- The repo is private until launch (see `docs/roadmap.md`), then it goes public under MIT.
+- **The test device is the owner's personal phone.** Ask before every device session, even if
+  you used it earlier in the same conversation. Never tap near
   the status bar or quick settings, never type into apps that hold user data, and undo any
   state you change. Benchmarks must use read-only ops or taps on known-empty areas.
 - Always stop what you started on the device: the agent dies with the server, but check

@@ -13,8 +13,8 @@ Status as of the latest merged PR. Move items to Done when they land.
 
 ## Next: open-source readiness
 
-- [ ] LICENSE (MIT), CONTRIBUTING, issue/PR templates
-- [ ] CI: build agent jar + typecheck on every PR
+- [x] LICENSE (MIT), CONTRIBUTING, issue/PR templates
+- [x] CI: build agent jar + typecheck on every PR
 - [ ] Unit tests for the server (step splitting, formatting) with a fake agent
 - [ ] npm packaging: `npx droidreplay`, jar shipped in `assets/`, version check so an old
       agent on the device gets replaced
