@@ -15,7 +15,7 @@ Status as of the latest merged PR. Move items to Done when they land.
 
 - [x] LICENSE (MIT), CONTRIBUTING, issue/PR templates
 - [x] CI: build agent jar + typecheck on every PR
-- [ ] Unit tests for the server (step splitting, formatting) with a fake agent
+- [x] Unit tests for the server (step splitting, formatting) with a fake agent
 - [ ] npm packaging: `npx droidreplay`, jar shipped in `assets/`, version check so an old
       agent on the device gets replaced
 - [ ] `doctor` command: checks adb, device, Xiaomi toggle, UiAutomation slot

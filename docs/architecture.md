@@ -57,11 +57,11 @@ is not clickable, the agent taps its nearest clickable ancestor.
 | wait_for / wait_gone | target, `timeout` | agent (polls every 40 ms) |
 | wait_idle | `quietMs`, `timeout` | agent (tree unchanged for quietMs) |
 | sleep | `ms` | agent |
-| launch / stop_app | `package` | server (`cmd package resolve-activity`, `am start`) |
+| launch / stop_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity`, `am start`) |
 | apps | `filter` | server (`pm list packages -3`) |
 | screenshot | `name` | server (saves to `DROIDREPLAY_EVIDENCE_DIR`) |
 
-The `act` tool splits a batch into runs of agent ops and server ops, executes them in order,
+The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server ops, executes them in order,
 stops at the first failure, then (unless `observe_after: false`) waits for idle and appends the
 screen.
 
