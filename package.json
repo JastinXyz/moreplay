@@ -26,5 +26,23 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3"
-  }
+  },
+  "author": "JastinXyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JastinXyz/droidreplay.git"
+  },
+  "homepage": "https://github.com/JastinXyz/droidreplay#readme",
+  "bugs": {
+    "url": "https://github.com/JastinXyz/droidreplay/issues"
+  },
+  "keywords": [
+    "mcp",
+    "android",
+    "adb",
+    "uiautomator",
+    "automation",
+    "testing",
+    "ai-agent"
+  ]
 }
