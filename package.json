@@ -17,7 +17,8 @@
   "scripts": {
     "build:agent": "./agent/build.sh && mkdir -p assets && cp agent/build/droidreplay.jar assets/",
     "build": "npm run build:agent && tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "tsc && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

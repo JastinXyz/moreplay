@@ -23,7 +23,11 @@ digging through git history. If a doc says something the code no longer does, fi
   - `build.sh`: javac + d8 against the newest installed Android platform.
 - `src/`: TypeScript MCP server.
   - `device.ts`: adb, device selection, push/start/stop of the agent, HTTP client.
-  - `index.ts`: MCP tools (`observe`, `act`, `screenshot`) and host-side ops (launch, apps...).
+  - `index.ts`: MCP tool registration (`observe`, `act`, `screenshot`) and process lifecycle.
+  - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
+    screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
+- `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
+  device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions.
 - `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
@@ -38,6 +42,7 @@ npm install
 npm run build          # agent jar + copy to assets/ + tsc
 npm run build:agent    # agent only
 npx tsc                # server only
+npm test               # tsc + unit tests (no device)
 node spike/bench.mjs   # timing against a connected device (taps nothing)
 ```
 
@@ -46,12 +51,14 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
 ## Working rules
 
 - **Work through PRs.** Branch from `main` (`feat/...`, `fix/...`, `docs/...`, `chore/...`),
-  open a PR with `gh pr create` using the template, and **stop**. The owner reviews and
-  merges; start the next PR only after the previous one is merged (branch from fresh `main`).
-  Never push to `main` directly and never merge a PR yourself.
+  open a PR with `gh pr create` using the template, give the owner the link, and **stop**.
+  When the owner says it is OK, merge it yourself (`gh pr merge <n> --squash --delete-branch`),
+  then start the next PR from fresh `main`. One PR at a time. Never push to `main` directly and
+  never merge without the owner's OK for that specific PR.
 - Conventional Commits, English. No AI attribution anywhere (no Co-Authored-By trailer, no
   "Generated with" footer). Git identity is the repo's configured `JastinXyz`.
-- CI (`.github/workflows/ci.yml`) runs `npm run build` on every PR; keep it green.
+- CI (`.github/workflows/ci.yml`) runs `npm run build` and `npm test` on every PR; keep it green.
+- New server logic gets a unit test with the fake device. Keep the tool-definition budget.
 - The repo is private until launch (see `docs/roadmap.md`), then it goes public under MIT.
 - **The test device is the owner's personal phone.** Ask before every device session, even if
   you used it earlier in the same conversation. Never tap near
