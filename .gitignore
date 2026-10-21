@@ -1,0 +1,7 @@
+build/
+node_modules/
+*.dex
+*.jar
+spike/evidence/
+evidence/
+dist/

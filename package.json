@@ -1,0 +1,30 @@
+{
+  "name": "droidreplay",
+  "version": "0.1.0",
+  "description": "Fast Android MCP server: no APK install, on-device waits and batching",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "droidreplay": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:agent": "./agent/build.sh && mkdir -p assets && cp agent/build/droidreplay.jar assets/",
+    "build": "npm run build:agent && tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}
