@@ -18,16 +18,21 @@ digging through git history. If a doc says something the code no longer does, fi
 ## Layout
 
 - `agent/`: device-side Java agent, built into `agent/build/droidreplay.jar` (dex inside).
+  `build.sh` generates `Version.java` from `package.json`, and `/ping` answers `pong <version>`.
   - `Main.java`: UiAutomation bootstrap (reflection) + minimal HTTP server.
   - `Device.java`: every op (observe, tap, type, scroll, wait_*, key, screenshot).
   - `build.sh`: javac + d8 against the newest installed Android platform.
 - `src/`: TypeScript MCP server.
   - `device.ts`: adb, device selection, push/start/stop of the agent, HTTP client.
-  - `index.ts`: MCP tool registration (`observe`, `act`, `screenshot`) and process lifecycle.
+  - `index.ts`: CLI entry (`droidreplay` = MCP server, `doctor`, `--version`, `--help`).
+  - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`) and process lifecycle.
+  - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
+    start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
-  device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions.
+  device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions;
+  `cli.test.mjs` covers `--version`, `--help`, unknown commands.
 - `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
@@ -43,6 +48,8 @@ npm run build          # agent jar + copy to assets/ + tsc
 npm run build:agent    # agent only
 npx tsc                # server only
 npm test               # tsc + unit tests (no device)
+node dist/index.js doctor   # checks the connected device (starts the agent, no taps)
+npm pack --dry-run     # what would ship to npm
 node spike/bench.mjs   # timing against a connected device (taps nothing)
 ```
 
@@ -66,6 +73,8 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
   state you change. Benchmarks must use read-only ops or taps on known-empty areas.
 - Always stop what you started on the device: the agent dies with the server, but check
   `adb shell ps -A | grep app_process` and `adb forward --list` after experiments.
+- scrcpy can run alongside the agent (it does not use UiAutomation); the owner often mirrors
+  the phone with it.
 - Only one UiAutomation client can exist per device. Stop mobilecli / Appium / Maestro /
   uiautomator2 before running the agent (and vice versa).
 

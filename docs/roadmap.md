@@ -16,9 +16,9 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] LICENSE (MIT), CONTRIBUTING, issue/PR templates
 - [x] CI: build agent jar + typecheck on every PR
 - [x] Unit tests for the server (step splitting, formatting) with a fake agent
-- [ ] npm packaging: `npx droidreplay`, jar shipped in `assets/`, version check so an old
-      agent on the device gets replaced
-- [ ] `doctor` command: checks adb, device, Xiaomi toggle, UiAutomation slot
+- [x] npm packaging: `bin`, `files` (dist + jar, ~21 kB), `prepack` build, versioned agent,
+      md5-based push. Publishing itself happens at launch.
+- [x] `doctor` command: checks adb, device, Xiaomi toggle, UiAutomation slot
 
 ## Then: the differentiator
 

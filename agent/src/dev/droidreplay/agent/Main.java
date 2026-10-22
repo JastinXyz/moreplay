@@ -25,7 +25,7 @@ import org.json.JSONObject;
  * Device-side agent, launched via:
  *   CLASSPATH=/data/local/tmp/droidreplay.jar app_process / dev.droidreplay.agent.Main [port]
  * Holds one UiAutomation connection for its whole lifetime and serves a tiny HTTP API:
- *   GET  /ping
+ *   GET  /ping                                                    -> "pong <version>"
  *   POST /run         {"steps":[{op:...}], "stopOnError":true}  -> JSON results
  *   GET  /screenshot  ?max=1024&q=75                             -> image/jpeg
  */
@@ -123,7 +123,7 @@ public final class Main {
         OutputStream out = s.getOutputStream();
         try {
             if (path.equals("/ping")) {
-                respond(out, 200, "text/plain", "pong".getBytes(StandardCharsets.UTF_8));
+                respond(out, 200, "text/plain", ("pong " + Version.NAME).getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/run") && method.equals("POST")) {
                 JSONObject req = new JSONObject(new String(body, StandardCharsets.UTF_8));
                 JSONObject res = device.run(req.getJSONArray("steps"), req.optBoolean("stopOnError", true));
