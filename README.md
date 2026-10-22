@@ -18,11 +18,19 @@ npm install
 npm run build
 ```
 
+Check your setup (starts the agent on the device, taps nothing):
+
+```bash
+node dist/index.js doctor
+```
+
 Claude Code:
 
 ```bash
 claude mcp add droidreplay -- node /path/to/droidreplay/dist/index.js
 ```
+
+Once published to npm this becomes `npx -y droidreplay` and `npx droidreplay doctor`.
 
 Env: `ANDROID_SERIAL` picks a device when several are connected; `DROIDREPLAY_EVIDENCE_DIR`
 sets where screenshots go (default `./evidence`).

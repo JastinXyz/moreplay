@@ -1,5 +1,6 @@
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -24,7 +25,11 @@ export interface RunResult {
   results: StepResult[];
 }
 
-function adbPath(): string {
+const here = dirname(fileURLToPath(import.meta.url));
+
+export const VERSION: string = JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")).version;
+
+export function adbPath(): string {
   const home = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
   if (home) {
     const p = join(home, "platform-tools", "adb");
@@ -34,7 +39,6 @@ function adbPath(): string {
 }
 
 function jarPath(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
   for (const p of [join(here, "..", "assets", "droidreplay.jar"), join(here, "..", "agent", "build", "droidreplay.jar")]) {
     if (existsSync(p)) return p;
   }
@@ -86,13 +90,28 @@ export class Device {
     return this.starting;
   }
 
+  /** True only when our agent answers with the version this server was built with. */
   private async ping(): Promise<boolean> {
+    return (await this.agentVersion()) === VERSION;
+  }
+
+  async agentVersion(): Promise<string | undefined> {
+    if (!this.port) return undefined;
     try {
       const res = await fetch(`http://127.0.0.1:${this.port}/ping`, { signal: AbortSignal.timeout(1000) });
-      return res.ok;
+      if (!res.ok) return undefined;
+      return (await res.text()).replace(/^pong ?/, "") || "unknown";
     } catch {
-      return false;
+      return undefined;
     }
+  }
+
+  /** Pushes the jar only when the device copy differs (md5), which saves a push per start. */
+  private async pushJar(serial: string): Promise<void> {
+    const local = jarPath();
+    const md5 = createHash("md5").update(readFileSync(local)).digest("hex");
+    const remote = (await this.shell(`md5sum ${DEVICE_JAR} 2>/dev/null; true`)).split(/\s+/)[0];
+    if (remote !== md5) await exec(this.adb, ["-s", serial, "push", local, DEVICE_JAR]);
   }
 
   private async startAgent(): Promise<void> {
@@ -101,7 +120,7 @@ export class Device {
     // A leftover agent would still hold the single UiAutomation slot.
     // "[n]" keeps pkill from matching (and killing) the shell that runs it.
     await this.shell(`pkill -f '${AGENT_CLASS.slice(0, -1)}[${AGENT_CLASS.slice(-1)}]'; true`);
-    await exec(this.adb, ["-s", serial, "push", jarPath(), DEVICE_JAR]);
+    await this.pushJar(serial);
     const { stdout } = await exec(this.adb, ["-s", serial, "forward", "tcp:0", `tcp:${DEVICE_PORT}`]);
     this.port = Number(stdout.trim());
 
@@ -119,6 +138,10 @@ export class Device {
       if (await this.ping()) return;
       if (!this.agent) break;
       await new Promise((r) => setTimeout(r, 150));
+    }
+    const answered = await this.agentVersion();
+    if (answered && answered !== VERSION) {
+      throw new Error(`agent on the device answered version ${answered}, expected ${VERSION}`);
     }
     const log = this.agentLog.trim().split("\n").slice(-6).join("\n");
     if (/already registered|UiAutomationService/.test(log)) {

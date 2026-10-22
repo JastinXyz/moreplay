@@ -16,10 +16,12 @@ apps on screen
 ## Agent lifecycle
 
 1. First tool call runs `Device.ensureAgent()`: pick the device (`ANDROID_SERIAL` or the only
-   one connected), kill a leftover agent, push the jar, `adb forward tcp:0 tcp:9070`, spawn
+   one connected), kill a leftover agent, push the jar only if its md5 differs from the copy on
+   the device, `adb forward tcp:0 tcp:9070`, spawn
    `adb shell CLASSPATH=/data/local/tmp/droidreplay.jar app_process / dev.droidreplay.agent.Main 9070`.
-2. Wait for `GET /ping` (up to 8 s). If the agent log mentions an existing UiAutomation
-   registration, report that another tool holds the slot.
+2. Wait for `GET /ping` to answer `pong <version>` with the server's own `package.json`
+   version (up to 8 s). A different version is reported as a stale agent. If the agent log
+   mentions an existing UiAutomation registration, report that another tool holds the slot.
 3. On server exit (stdin closed, SIGINT/SIGTERM): kill the adb shell child (the device process
    dies with it) and remove the forward.
 
@@ -34,7 +36,7 @@ from AOSP `cmds/uiautomator` and openatx/android-uiautomator-server-jar.
 
 Bound to 127.0.0.1 on the device; reached only through `adb forward`.
 
-- `GET /ping` -> `pong`
+- `GET /ping` -> `pong <version>` (version baked in at build time)
 - `POST /run` body `{"steps":[...], "stopOnError":true}` ->
   `{"ok":bool, "ms":n, "results":[{"op","ok","ms","out"|"error"}]}`
 - `GET /screenshot?max=<longest side, 0 = full>&q=<jpeg quality>` -> `image/jpeg`
