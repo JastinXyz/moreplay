@@ -29,8 +29,8 @@ Status as of the latest merged PR. Move items to Done when they land.
 
 ## Quality
 
-- [ ] Faster scroll (`ACTION_SCROLL_FORWARD` on the scrollable node, shorter settle)
-- [ ] Read all interactive windows (dialogs, IME, system popups), not just the active one
+- [x] Faster scroll (directional scroll actions, end-of-list detection), ~2x faster per scroll
+- [x] Read all interactive windows (dialogs, popups, permission prompts) + keyboard flag
 - [ ] Test on Android 11-13 and a non-rooted device; handle hidden-API drift per version
 - [ ] WebView: detect and fall back to CDP
 

@@ -96,6 +96,10 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
   after an observe. Recording turns them into `id`/`text` selectors for that reason.
 - A screenshot taken right after a tap catches the old screen. Screenshot steps wait for the
   tree to stay unchanged for 400 ms first (found when a replay saved the wrong evidence).
+- Scroll actions are async: comparing the tree right after `wait_idle` can see the old list and
+  call it the end. The agent waits for the tree to change first (`waitChange`).
+- While a popup/dialog is modal, `getWindows()` returns only it; the activity behind is
+  genuinely not reported. Use the `windows` debug op to see what the system lists.
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's

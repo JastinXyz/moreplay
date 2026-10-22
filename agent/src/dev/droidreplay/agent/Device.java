@@ -10,6 +10,8 @@ import android.view.InputEvent;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
@@ -91,6 +93,7 @@ final class Device {
     private String exec(String op, JSONObject s) throws Exception {
         switch (op) {
             case "observe": return observe();
+            case "windows": return describeWindows();
             case "tap": return tap(s, false);
             case "long_press": return tap(s, true);
             case "type": return type(s);
@@ -107,13 +110,77 @@ final class Device {
 
     // ---------------------------------------------------------------- observe
 
-    String observe() {
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-        refs.clear();
-        if (root == null) return "(no active window)";
+    /** One app-facing window: its root plus a name for the header line. */
+    private static final class Win {
+        final AccessibilityNodeInfo root;
+        final String name;
+
+        Win(AccessibilityNodeInfo root, String name) {
+            this.root = root;
+            this.name = name;
+        }
+    }
+
+    private boolean keyboardShown;
+
+    /**
+     * Windows a user can act on, top-most first: app windows (activities, dialogs, popups,
+     * permission prompts) plus whichever window is active. Status/navigation bars and the
+     * keyboard are left out; the keyboard only sets keyboardShown, since `type` sets text directly.
+     */
+    private List<Win> windows() {
+        List<Win> out = new ArrayList<>();
+        keyboardShown = false;
+        for (AccessibilityWindowInfo w : automation.getWindows()) {
+            int type = w.getType();
+            if (type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) {
+                keyboardShown = true;
+                continue;
+            }
+            if (type != AccessibilityWindowInfo.TYPE_APPLICATION && !w.isActive()) continue;
+            AccessibilityNodeInfo root = w.getRoot();
+            if (root == null) continue;
+            CharSequence title = w.getTitle();
+            out.add(new Win(root, title != null && title.length() > 0 ? title.toString() : String.valueOf(root.getPackageName())));
+        }
+        if (out.isEmpty()) {
+            AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+            if (root != null) out.add(new Win(root, String.valueOf(root.getPackageName())));
+        }
+        return out;
+    }
+
+    /** Debug view of every window the system reports, including the ones observe skips. */
+    private String describeWindows() {
         StringBuilder sb = new StringBuilder();
-        sb.append("app=").append(root.getPackageName()).append('\n');
-        walk(root, sb, false);
+        for (AccessibilityWindowInfo w : automation.getWindows()) {
+            AccessibilityNodeInfo root = w.getRoot();
+            Rect r = new Rect();
+            w.getBoundsInScreen(r);
+            sb.append("type=").append(w.getType()).append(" layer=").append(w.getLayer())
+                    .append(w.isActive() ? " active" : "").append(w.isFocused() ? " focused" : "")
+                    .append(" title=").append(w.getTitle())
+                    .append(" pkg=").append(root == null ? "(no root)" : root.getPackageName())
+                    .append(" bounds=").append(r.toShortString()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    String observe() {
+        List<Win> wins = windows();
+        refs.clear();
+        if (wins.isEmpty()) return "(no window)";
+        StringBuilder sb = new StringBuilder();
+        sb.append("app=").append(wins.get(0).root.getPackageName());
+        // Tells a popup or dialog apart from the activity when it is the only window.
+        if (wins.size() == 1) sb.append(" window=\"").append(wins.get(0).name).append('"');
+        if (keyboardShown) sb.append(" keyboard=shown");
+        sb.append('\n');
+        for (Win w : wins) {
+            // Headers only when there is more than one window, e.g. a dialog over an activity.
+            if (wins.size() > 1) sb.append("-- ").append(w.name).append('\n');
+            walk(w.root, sb, false);
+        }
         return sb.toString();
     }
 
@@ -258,10 +325,8 @@ final class Device {
         if (!s.has("text") && !s.has("id") && !s.has("desc")) {
             throw new IllegalArgumentException("selector needs ref, x/y, text, id or desc");
         }
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-        if (root == null) return null;
         List<AccessibilityNodeInfo> all = new ArrayList<>();
-        flatten(root, all);
+        for (Win w : windows()) flatten(w.root, all);
         AccessibilityNodeInfo partial = null;
         for (AccessibilityNodeInfo n : all) {
             int m = match(n, s);
@@ -354,35 +419,106 @@ final class Device {
         return "swiped";
     }
 
-    /** {"dir":"down"} scrolls content down (finger moves up). With "until", repeats until it is visible. */
+    /**
+     * {"dir":"down"} scrolls content down (finger moves up). With "until", repeats until the
+     * target is visible. Uses the accessibility scroll action on the biggest scrollable node
+     * (fast, and it reports the end of the list); falls back to a swipe when there is none.
+     */
     private String scroll(JSONObject s) {
         String dir = s.optString("dir", "down");
+        if (!dir.matches("up|down|left|right")) throw new IllegalArgumentException("dir must be up/down/left/right");
         int max = s.optInt("max", 10);
         JSONObject until = s.optJSONObject("until");
-        Rect screen = new Rect();
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-        if (root != null) root.getBoundsInScreen(screen);
-        int cx = screen.centerX();
-        int top = screen.top + screen.height() / 4;
-        int bottom = screen.bottom - screen.height() / 4;
+        String how = "swipe";
 
         for (int i = 0; i <= max; i++) {
             if (until != null && find(until) != null) return "found after " + i + " scroll(s)";
             if (i == max) break;
-            String before = until != null ? observe() : null;
-            switch (dir) {
-                case "down": swipe(cx, bottom, cx, top, 250); break;
-                case "up": swipe(cx, top, cx, bottom, 250); break;
-                case "left": swipe(screen.right - screen.width() / 5, screen.centerY(), screen.left + screen.width() / 5, screen.centerY(), 250); break;
-                case "right": swipe(screen.left + screen.width() / 5, screen.centerY(), screen.right - screen.width() / 5, screen.centerY(), 250); break;
-                default: throw new IllegalArgumentException("dir must be up/down/left/right");
+            String before = observe();
+            AccessibilityNodeInfo list = scrollableFor(dir);
+            boolean moved = list != null && scrollAction(list, dir);
+            if (moved) {
+                how = "action";
+            } else {
+                Rect area = new Rect();
+                if (list != null) list.getBoundsInScreen(area);
+                else if (!windows().isEmpty()) windows().get(0).root.getBoundsInScreen(area);
+                swipeIn(area, dir);
             }
-            if (until == null) return "scrolled " + dir;
-            waitIdle(200, 1500);
-            if (observe().equals(before)) break; // hit the end of the list
+            // Scroll actions are async: wait for the list to move before deciding it is at the end.
+            if (!waitChange(before, 700)) {
+                if (until == null) return "already at the end (" + dir + ")";
+                break;
+            }
+            waitIdle(150, 1000);
+            if (until == null) return "scrolled " + dir + " (" + how + ")";
         }
         if (until != null) throw new IllegalStateException("not found after scrolling: " + describe(until));
         return "scrolled " + dir;
+    }
+
+    /**
+     * The list to scroll in the top-most window that has one: the biggest node offering the
+     * directional action for `dir`, else the biggest scrollable node. Checking the direction
+     * keeps "down" from paging a horizontal pager that happens to be larger.
+     */
+    private AccessibilityNodeInfo scrollableFor(String dir) {
+        AccessibilityAction wanted = directional(dir);
+        for (Win w : windows()) {
+            List<AccessibilityNodeInfo> all = new ArrayList<>();
+            flatten(w.root, all);
+            AccessibilityNodeInfo bestDirectional = null;
+            AccessibilityNodeInfo bestAny = null;
+            long areaDirectional = 0;
+            long areaAny = 0;
+            for (AccessibilityNodeInfo n : all) {
+                if (!n.isScrollable()) continue;
+                Rect r = new Rect();
+                n.getBoundsInScreen(r);
+                long area = (long) r.width() * r.height();
+                if (n.getActionList().contains(wanted) && area > areaDirectional) {
+                    areaDirectional = area;
+                    bestDirectional = n;
+                }
+                if (area > areaAny) {
+                    areaAny = area;
+                    bestAny = n;
+                }
+            }
+            if (bestDirectional != null) return bestDirectional;
+            if (bestAny != null) return bestAny;
+        }
+        return null;
+    }
+
+    private static AccessibilityAction directional(String dir) {
+        switch (dir) {
+            case "down": return AccessibilityAction.ACTION_SCROLL_DOWN;
+            case "up": return AccessibilityAction.ACTION_SCROLL_UP;
+            case "left": return AccessibilityAction.ACTION_SCROLL_LEFT;
+            default: return AccessibilityAction.ACTION_SCROLL_RIGHT;
+        }
+    }
+
+    /** Directional scroll actions (API 23+) when offered, else forward/backward. */
+    private static boolean scrollAction(AccessibilityNodeInfo n, String dir) {
+        AccessibilityAction wanted = directional(dir);
+        if (n.getActionList().contains(wanted)) return n.performAction(wanted.getId());
+        boolean forward = dir.equals("down") || dir.equals("right");
+        return n.performAction(forward ? AccessibilityNodeInfo.ACTION_SCROLL_FORWARD : AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+    }
+
+    private void swipeIn(Rect a, String dir) {
+        int cx = a.centerX();
+        int cy = a.centerY();
+        int dy = a.height() / 4;
+        int dx = a.width() / 3;
+        switch (dir) {
+            case "down": swipe(cx, cy + dy, cx, cy - dy, 250); break;
+            case "up": swipe(cx, cy - dy, cx, cy + dy, 250); break;
+            case "left": swipe(cx + dx, cy, cx - dx, cy, 250); break;
+            default: swipe(cx - dx, cy, cx + dx, cy, 250); break;
+        }
     }
 
     /** {"value":"..."} into the focused field, or first taps the field given by ref/x,y/id/desc/field (its text). */
@@ -395,8 +531,7 @@ final class Device {
             tap(sel, false);
             SystemClock.sleep(150);
         }
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-        field = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         if (field == null || !field.isEditable()) throw new IllegalStateException("no focused text field");
         String value = s.optString("value");
         if (s.optBoolean("append", false) && field.getText() != null) value = field.getText() + value;
@@ -443,6 +578,16 @@ final class Device {
             }
             SystemClock.sleep(POLL_MS);
         }
+    }
+
+    /** True as soon as the observed tree differs from `before`, false if it stays the same for timeoutMs. */
+    private boolean waitChange(String before, long timeoutMs) {
+        long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (!observe().equals(before)) return true;
+            SystemClock.sleep(POLL_MS);
+        }
+        return !observe().equals(before);
     }
 
     /** Waits until the observed tree stops changing for quietMs. Cheap substitute for "app is idle". */
