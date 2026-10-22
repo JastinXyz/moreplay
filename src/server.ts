@@ -41,7 +41,7 @@ export async function startServer(): Promise<void> {
         "Ops: tap, long_press{ms}, type{value, field?=label of field, submit?, append?} (no target = focused field),",
         "scroll{dir:down|up|left|right, until?:{text|id|desc}, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
         "wait_for{target, timeout?=5000}, wait_gone{target, timeout?}, wait_idle{quietMs?=300, timeout?}, sleep{ms},",
-        "launch{package}, stop_app{package}, apps{filter?}, screenshot{name} (saved as evidence file, not shown), observe.",
+        "launch{package}, stop_app{package}, apps{filter?}, screenshot{name} (saved as evidence file, not shown), observe, windows (debug).",
       ].join("\n"),
       inputSchema: {
         steps: z.array(z.object({ op: z.string() }).passthrough()).min(1),
