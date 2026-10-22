@@ -14,51 +14,90 @@ export type Step = { op: string } & Record<string, unknown>;
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
 export const HOST_OPS = new Set(["launch", "stop_app", "apps", "screenshot"]);
 
+// How long the tree must stay unchanged before a screenshot step captures it.
+const SETTLE_MS = 400;
+
 export interface ActOptions {
   observeAfter?: boolean;
   evidenceDir: string;
+  /** Gets every step that succeeded, with the agent's result, e.g. to record a flow. */
+  onSuccess?: (step: Step, result: StepResult) => void;
+}
+
+export interface Outcome {
+  step: Step;
+  result: StepResult;
+}
+
+export interface Execution {
+  lines: string[];
+  outcomes: Outcome[];
+  /** Index into the input steps of the step that failed, if any. */
+  failedAt?: number;
 }
 
 /**
  * Runs steps in order. Consecutive agent ops go to the device in one request; host ops run
- * here in between. Stops at the first failure, then appends the screen unless told not to.
+ * here in between. Stops at the first failure.
  */
-export async function runAct(device: ActDevice, steps: Step[], opts: ActOptions): Promise<string> {
+export async function executeSteps(device: ActDevice, steps: Step[], evidenceDir: string): Promise<Execution> {
   const lines: string[] = [];
-  let failed = false;
+  const outcomes: Outcome[] = [];
+  let failedAt: number | undefined;
   let pending: Step[] = [];
 
   const flush = async () => {
     if (!pending.length) return;
-    const r = await device.run(pending, true);
+    const batch = pending;
     pending = [];
-    for (const s of r.results) lines.push(fmt(s));
-    failed = !r.ok;
+    const r = await device.run(batch, true);
+    r.results.forEach((res, i) => {
+      lines.push(fmt(res));
+      outcomes.push({ step: batch[i], result: res });
+      if (!res.ok && failedAt === undefined) failedAt = outcomes.length - 1;
+    });
   };
 
   for (const step of steps) {
-    if (failed) break;
+    if (failedAt !== undefined) break;
     if (!HOST_OPS.has(step.op)) {
       pending.push(step);
       continue;
     }
     await flush();
-    if (failed) break;
+    if (failedAt !== undefined) break;
     const t0 = Date.now();
+    let result: StepResult;
     try {
-      lines.push(fmt({ op: step.op, ok: true, ms: 0, out: await hostOp(device, step, opts.evidenceDir) }, Date.now() - t0));
+      // Evidence must show the screen a tap led to, not the transition. Replays tap and shoot
+      // back to back, so let the screen settle first.
+      if (step.op === "screenshot") await device.run([{ op: "wait_idle", quietMs: SETTLE_MS, timeout: 3000 }]);
+      result = { op: step.op, ok: true, ms: 0, out: await hostOp(device, step, evidenceDir) };
     } catch (e) {
-      lines.push(fmt({ op: step.op, ok: false, ms: 0, error: (e as Error).message }, Date.now() - t0));
-      failed = true;
+      result = { op: step.op, ok: false, ms: 0, error: (e as Error).message };
     }
+    result.ms = Date.now() - t0;
+    lines.push(fmt(result));
+    outcomes.push({ step, result });
+    if (!result.ok) failedAt = outcomes.length - 1;
   }
   await flush();
+  return { lines, outcomes, failedAt };
+}
 
+/** The `act` tool: executeSteps, then the screen afterwards unless told not to. */
+export async function runAct(device: ActDevice, steps: Step[], opts: ActOptions): Promise<string> {
+  const { lines, outcomes } = await executeSteps(device, steps, opts.evidenceDir);
+  if (opts.onSuccess) for (const o of outcomes) if (o.result.ok) opts.onSuccess(o.step, o.result);
   if (opts.observeAfter !== false && steps[steps.length - 1].op !== "observe") {
-    const r = await device.run([{ op: "wait_idle", quietMs: 250, timeout: 2000 }, { op: "observe" }]);
-    lines.push("--- screen", r.results[1]?.out ?? "");
+    lines.push("--- screen", await screen(device));
   }
   return lines.join("\n");
+}
+
+export async function screen(device: ActDevice): Promise<string> {
+  const r = await device.run([{ op: "wait_idle", quietMs: 250, timeout: 2000 }, { op: "observe" }]);
+  return r.results[1]?.out ?? r.results[0]?.error ?? "";
 }
 
 export function fmt(s: StepResult, ms = s.ms): string {

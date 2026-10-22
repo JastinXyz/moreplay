@@ -6,7 +6,7 @@ takes ~30 ms instead of ~3 s. The TypeScript MCP server on the laptop pushes and
 agent, batches steps into one request, and saves screenshots as evidence files.
 
 Goal: an open-source alternative to mobile-mcp whose edge is speed, small token footprint, and
-(planned) record once, replay without a model.
+record once, replay without a model (`flow` tool and `droidreplay run`).
 
 ## Keep the docs current
 
@@ -25,19 +25,26 @@ digging through git history. If a doc says something the code no longer does, fi
 - `src/`: TypeScript MCP server.
   - `device.ts`: adb, device selection, push/start/stop of the agent, HTTP client.
   - `index.ts`: CLI entry (`droidreplay` = MCP server, `doctor`, `--version`, `--help`).
-  - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`) and process lifecycle.
+  - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`, `flow`), the active
+    recorder, and process lifecycle.
+  - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
+    agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
+  - `run-cli.ts`: `droidreplay run <flow> [--var k=v]` (replay with no model, exit 0/1).
   - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
     start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
   device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions;
-  `cli.test.mjs` covers `--version`, `--help`, unknown commands.
+  `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the
+  YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load.
 - `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
-  `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only.
+  `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;
+  `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session with flows and
+  evidence under `spike/` (both gitignored).
 - `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands
@@ -85,6 +92,10 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
 - `pkill -f <pattern>` run through `adb shell` matches its own shell and kills it. Use the
   `[x]` trick (`pkill -f 'Mai[n]'`).
 - `org.json` from the Android stub throws checked `JSONException`; declare or avoid it.
+- Refs (`@4`) live in the agent process: they are only valid within one server session, right
+  after an observe. Recording turns them into `id`/`text` selectors for that reason.
+- A screenshot taken right after a tap catches the old screen. Screenshot steps wait for the
+  tree to stay unchanged for 400 ms first (found when a replay saved the wrong evidence).
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's

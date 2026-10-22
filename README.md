@@ -1,6 +1,6 @@
 # droidreplay
 
-Fast Android MCP server. An 11 KB agent runs on the device through `app_process` (no APK to
+Fast Android MCP server. Let the AI walk a flow once, then replay it with no model at all. An 11 KB agent runs on the device through `app_process` (no APK to
 install) and keeps one UiAutomation connection open, so reading the screen takes ~30 ms
 instead of ~3 s, and a whole batch of steps runs in one request.
 
@@ -33,7 +33,7 @@ claude mcp add droidreplay -- node /path/to/droidreplay/dist/index.js
 Once published to npm this becomes `npx -y droidreplay` and `npx droidreplay doctor`.
 
 Env: `ANDROID_SERIAL` picks a device when several are connected; `DROIDREPLAY_EVIDENCE_DIR`
-sets where screenshots go (default `./evidence`).
+sets where screenshots go (default `./evidence`); `DROIDREPLAY_FLOWS_DIR` where flows live (default `./flows`).
 
 ## Tools
 
@@ -42,12 +42,32 @@ sets where screenshots go (default `./evidence`).
   wait_idle, key, launch, screenshot, ...). Stops at the first failure and returns the screen.
 - `screenshot`: saves a JPEG to the evidence folder and returns the path. Only sends the
   image to the model with `show: true`.
+- `flow`: `record` the steps the AI takes, `save` them as YAML, `run` them again later (each
+  step waits for its element), `patch` a step that broke after a UI change.
+
+## Replay without a model
+
+```yaml
+# flows/login.yaml
+name: login
+steps:
+  - launch: com.example.app
+  - tap: Masuk
+  - type: {field: Email, value: "${email}"}
+  - wait_for: Beranda
+  - screenshot: login-ok
+```
+
+```bash
+droidreplay run login --var email=qa@example.com   # exit code 0 = passed
+```
+
+Screenshots land in `evidence/<flow>/<timestamp>/`. Works in CI with a device or emulator.
 
 ## Notes
 
 - Only one UiAutomation client can run at a time. Stop Appium, Maestro, uiautomator2 or
   mobilecli before using droidreplay.
-- Replay of recorded flows without a model is planned, not built yet.
 
 See `spike/RESULTS.md` for measurements, `docs/architecture.md` for how it works, and
 `docs/roadmap.md` for what is next.
