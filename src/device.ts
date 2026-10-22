@@ -17,6 +17,8 @@ export interface StepResult {
   ms: number;
   out?: string;
   error?: string;
+  /** Stable selector of the element acted on (agent fills it for targeted steps). */
+  sel?: Record<string, string>;
 }
 
 export interface RunResult {

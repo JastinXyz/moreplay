@@ -38,7 +38,8 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
 
 - `GET /ping` -> `pong <version>` (version baked in at build time)
 - `POST /run` body `{"steps":[...], "stopOnError":true}` ->
-  `{"ok":bool, "ms":n, "results":[{"op","ok","ms","out"|"error"}]}`
+  `{"ok":bool, "ms":n, "results":[{"op","ok","ms","out"|"error","sel"?}]}`. `sel` is the stable
+  selector of the element a targeted step acted on (see Flows).
 - `GET /screenshot?max=<longest side, 0 = full>&q=<jpeg quality>` -> `image/jpeg`
 
 ## Steps
@@ -46,7 +47,8 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
 Each step is `{"op": "...", ...}`. Targets for tap/long_press/type/wait_*:
 `ref` (from the latest observe) | `x`,`y` | `text` (text or content-desc, exact first, then
 contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. When the matched node
-is not clickable, the agent taps its nearest clickable ancestor.
+is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
+text/id/desc target until it appears; replays set it on every targeted step.
 
 | op | params | where |
 |---|---|---|
@@ -81,3 +83,32 @@ descendants get no line of their own. Non-pressable nodes appear only if they ca
 editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled.
 
 Only the active window is read today (no dialogs in other windows, no keyboard).
+
+## Flows (src/flow.ts)
+
+A flow is a YAML file in `DROIDREPLAY_FLOWS_DIR` (default `./flows`):
+
+```yaml
+name: my-device
+steps:
+  - launch: com.android.settings
+  - tap: Perangkat saya          # short form = {text: ...}
+  - type: {field: Email, value: "${email}"}
+  - screenshot: my-device
+  - key: back
+  - wait_for: Perangkat saya
+```
+
+Short forms: launch/stop_app -> package, key -> key, screenshot -> name, sleep -> ms,
+scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps -> filter.
+
+- **Recording** (`flow record` ... `flow save`): every successful `act` step goes to the
+  recorder. observe, apps and wait_idle are dropped; `wait` is stripped. A `ref` becomes the
+  agent's `sel`: unique id, else unique label, else id + own text, else label; with neither,
+  the tapped coordinates. For `type`, a label selector is stored as `field`.
+- **Replay** (`flow run`, or `droidreplay run` with no model): `${var}` substitution (missing
+  vars fail before anything runs), `wait: 5000` on targeted steps and `timeout: 5000` on
+  wait_for/wait_gone, then one `executeSteps`. Screenshot steps first wait for the screen to
+  settle (tree unchanged 400 ms). Evidence goes to `<evidence>/<flow>/<YYYYMMDD-HHMMSS>/`.
+- **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
+  a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).

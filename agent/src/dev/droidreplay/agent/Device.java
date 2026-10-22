@@ -32,7 +32,25 @@ final class Device {
     private final UiAutomation automation;
     private final Method injectNoAnimWait;
     // Tap targets from the latest observe, so steps can say {"ref": 12}.
-    private final Map<Integer, int[]> refs = new HashMap<>();
+    private final Map<Integer, Ref> refs = new HashMap<>();
+    // Stable selector of the element the current step acted on, reported so flows can be recorded.
+    private JSONObject lastSel;
+
+    /** What observe saw for one @ref: where to tap and how to find it again later. */
+    private static final class Ref {
+        final int x, y;
+        final String id;       // short resource id (after ":id/"), or null
+        final String text;     // first label part, or null
+        final boolean ownText; // text comes from the node itself, not a folded-in child
+
+        Ref(int x, int y, String id, String text, boolean ownText) {
+            this.x = x;
+            this.y = y;
+            this.id = id;
+            this.text = text;
+            this.ownText = ownText;
+        }
+    }
 
     Device(UiAutomation automation) {
         this.automation = automation;
@@ -55,8 +73,10 @@ final class Device {
             String op = step.optString("op");
             long s0 = SystemClock.uptimeMillis();
             JSONObject r = new JSONObject().put("op", op);
+            lastSel = null;
             try {
                 r.put("ok", true).put("out", exec(op, step));
+                if (lastSel != null) r.put("sel", lastSel);
             } catch (Exception e) {
                 allOk = false;
                 r.put("ok", false).put("error", e.getMessage() != null ? e.getMessage() : e.toString());
@@ -128,7 +148,12 @@ final class Device {
             Rect r = new Rect();
             n.getBoundsInScreen(r);
             int ref = refs.size();
-            refs.put(ref, new int[]{r.centerX(), r.centerY()});
+            String shortId = n.getViewIdResourceName();
+            if (shortId != null) shortId = shortId.substring(shortId.indexOf('/') + 1);
+            Set<String> own = new LinkedHashSet<>();
+            addText(n, own);
+            String firstPart = label.isEmpty() ? null : label.split(" · ")[0];
+            refs.put(ref, new Ref(r.centerX(), r.centerY(), shortId, firstPart, !own.isEmpty()));
             sb.append('@').append(ref).append(' ').append(shortClass(n.getClassName()));
             if (!label.isEmpty()) sb.append(" \"").append(label).append('"');
             String id = n.getViewIdResourceName();
@@ -180,16 +205,27 @@ final class Device {
 
     // ---------------------------------------------------------------- selectors
 
-    /** Resolves a step's selector (ref | x,y | text | id | desc) to a screen point. */
-    private int[] point(JSONObject s) {
+    /**
+     * Resolves a step's selector (ref | x,y | text | id | desc) to a screen point. With "wait"
+     * (ms), a text/id/desc selector is polled until it appears, which replays rely on.
+     */
+    private int[] point(JSONObject s) throws Exception {
         if (s.has("ref")) {
-            int[] p = refs.get(s.optInt("ref"));
-            if (p == null) throw new IllegalArgumentException("unknown ref @" + s.optInt("ref") + " (observe again)");
-            return p;
+            Ref ref = refs.get(s.optInt("ref"));
+            if (ref == null) throw new IllegalArgumentException("unknown ref @" + s.optInt("ref") + " (observe again)");
+            lastSel = selectorFor(ref);
+            return new int[]{ref.x, ref.y};
         }
         if (s.has("x") && s.has("y")) return new int[]{s.optInt("x"), s.optInt("y")};
         AccessibilityNodeInfo n = find(s);
+        long deadline = SystemClock.uptimeMillis() + s.optLong("wait", 0);
+        while (n == null && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS);
+            n = find(s);
+        }
         if (n == null) throw new IllegalArgumentException("not found: " + describe(s));
+        lastSel = new JSONObject();
+        for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
         AccessibilityNodeInfo target = n;
         // Text usually sits on a child of the thing that is actually clickable.
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
@@ -197,6 +233,25 @@ final class Device {
         Rect r = new Rect();
         target.getBoundsInScreen(r);
         return new int[]{r.centerX(), r.centerY()};
+    }
+
+    /**
+     * The most stable way to find a ref again: a unique id, else a unique label, else id + own
+     * text, else the label. Null when the element has neither (the caller keeps coordinates).
+     */
+    private JSONObject selectorFor(Ref ref) throws Exception {
+        int sameId = 0;
+        int sameText = 0;
+        for (Ref other : refs.values()) {
+            if (ref.id != null && ref.id.equals(other.id)) sameId++;
+            if (ref.text != null && ref.text.equals(other.text)) sameText++;
+        }
+        JSONObject sel = new JSONObject();
+        if (ref.id != null && sameId == 1) return sel.put("id", ref.id);
+        if (ref.text != null && sameText == 1) return sel.put("text", ref.text);
+        if (ref.id != null && ref.text != null && ref.ownText) return sel.put("id", ref.id).put("text", ref.text);
+        if (ref.text != null) return sel.put("text", ref.text);
+        return null;
     }
 
     private AccessibilityNodeInfo find(JSONObject s) {
@@ -274,7 +329,7 @@ final class Device {
         return ok;
     }
 
-    private String tap(JSONObject s, boolean longPress) {
+    private String tap(JSONObject s, boolean longPress) throws Exception {
         int[] p = point(s);
         long down = SystemClock.uptimeMillis();
         boolean ok = touch(MotionEvent.ACTION_DOWN, down, down, p[0], p[1], true);
@@ -334,9 +389,9 @@ final class Device {
     private String type(JSONObject s) throws Exception {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
-        for (String k : new String[]{"ref", "x", "y", "id", "desc"}) if (s.has(k)) sel.put(k, s.opt(k));
+        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait"}) if (s.has(k)) sel.put(k, s.opt(k));
         if (s.has("field")) sel.put("text", s.optString("field"));
-        if (sel.length() > 0) {
+        if (sel.length() > (sel.has("wait") ? 1 : 0)) {
             tap(sel, false);
             SystemClock.sleep(150);
         }
