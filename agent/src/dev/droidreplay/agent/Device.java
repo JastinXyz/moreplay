@@ -179,7 +179,7 @@ final class Device {
         for (Win w : wins) {
             // Headers only when there is more than one window, e.g. a dialog over an activity.
             if (wins.size() > 1) sb.append("-- ").append(w.name).append('\n');
-            walk(w.root, sb, false);
+            walk(w.root, sb, false, new ArrayList<>());
         }
         return sb.toString();
     }
@@ -188,7 +188,7 @@ final class Device {
      * One line per node worth knowing about. Text inside a clickable node is folded into that
      * node's label, so an icon + title + container shows up once instead of three times.
      */
-    private void walk(AccessibilityNodeInfo n, StringBuilder sb, boolean absorbed) {
+    private void walk(AccessibilityNodeInfo n, StringBuilder sb, boolean absorbed, List<Rect> covers) {
         if (n == null || !n.isVisibleToUser()) return;
         boolean pressable = n.isClickable() || n.isLongClickable() || n.isCheckable();
         boolean emit;
@@ -214,6 +214,14 @@ final class Device {
         if (emit) {
             Rect r = new Rect();
             n.getBoundsInScreen(r);
+            // Tap targets get the point a tap would actually reach, or the covered flag.
+            boolean covered = false;
+            if (pressable || n.isEditable()) {
+                Rect vis = new Rect(r);
+                for (Rect c : covers) cut(vis, c);
+                covered = vis.isEmpty();
+                if (!covered) r = vis;
+            }
             int ref = refs.size();
             String shortId = n.getViewIdResourceName();
             if (shortId != null) shortId = shortId.substring(shortId.indexOf('/') + 1);
@@ -235,11 +243,46 @@ final class Device {
             if (n.isCheckable()) sb.append(n.isChecked() ? " on" : " off");
             if (n.isSelected()) sb.append(" selected");
             if (!n.isEnabled()) sb.append(" disabled");
+            if (covered) sb.append(" covered");
             sb.append('\n');
         }
         // Children of a pressable node had their text folded in above; only their own actions show.
         boolean childAbsorbed = absorbed || pressable;
-        for (int i = firstUncovered(n); i < n.getChildCount(); i++) walk(n.getChild(i), sb, childAbsorbed);
+        int count = n.getChildCount();
+        int first = firstUncovered(n);
+        if (count - first < 2) {
+            for (int i = first; i < count; i++) walk(n.getChild(i), sb, childAbsorbed, covers);
+            return;
+        }
+        // Same covers as visibleRect, computed once per parent instead of per node.
+        Rect pb = new Rect();
+        n.getBoundsInScreen(pb);
+        AccessibilityNodeInfo[] kids = new AccessibilityNodeInfo[count];
+        Rect[] bounds = new Rect[count];
+        Rect[] cover = new Rect[count];
+        for (int i = first; i < count; i++) {
+            kids[i] = n.getChild(i);
+            bounds[i] = new Rect();
+            if (kids[i] != null && kids[i].isVisibleToUser()) kids[i].getBoundsInScreen(bounds[i]);
+        }
+        for (int i = first; i < count; i++) {
+            List<Rect> mine = covers;
+            for (int j = i + 1; j < count; j++) {
+                if (bounds[j].isEmpty() || !Rect.intersects(bounds[i], bounds[j])) continue;
+                if (cover[j] == null) cover[j] = coverOf(kids[j], bounds[j], pb);
+                if (mine == covers) mine = new ArrayList<>(covers);
+                mine.add(cover[j]);
+            }
+            walk(kids[i], sb, childAbsorbed, mine);
+        }
+    }
+
+    /** What a later sibling hides: its bounds, or only its content when it fills the parent. */
+    private static Rect coverOf(AccessibilityNodeInfo sib, Rect sb, Rect parent) {
+        if (!sb.contains(parent)) return sb;
+        Rect content = new Rect();
+        contentBounds(sib, content, new int[] {COVER_SCAN_LIMIT});
+        return content;
     }
 
     // How much of the parent's height a covering child's content must span to count as a screen.
@@ -354,9 +397,66 @@ final class Device {
         // Text usually sits on a child of the thing that is actually clickable.
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
         if (target == null) target = n;
-        Rect r = new Rect();
-        target.getBoundsInScreen(r);
+        Rect r = visibleRect(target);
+        if (r.isEmpty()) throw new IllegalStateException(describe(s) + " is covered by another element (scroll it into view)");
         return new int[]{r.centerX(), r.centerY()};
+    }
+
+    /**
+     * The part of a node not hidden by siblings drawn after it or after one of its ancestors,
+     * e.g. a list card half under a bottom tab bar. A later sibling that fills its parent (an
+     * overlay layer) only covers with its content; a smaller one covers with its whole bounds.
+     * Only covers spanning (nearly) the full width or height are cut away, which is what bars,
+     * floating tab bars and sheets do; a corner overlap leaves the rect as is.
+     */
+    private static Rect visibleRect(AccessibilityNodeInfo n) {
+        Rect r = new Rect();
+        n.getBoundsInScreen(r);
+        AccessibilityNodeInfo child = n;
+        AccessibilityNodeInfo parent = n.getParent();
+        while (parent != null && !r.isEmpty()) {
+            Rect pb = new Rect();
+            parent.getBoundsInScreen(pb);
+            boolean after = false;
+            for (int i = 0; i < parent.getChildCount(); i++) {
+                AccessibilityNodeInfo sib = parent.getChild(i);
+                if (sib == null) continue;
+                if (!after) {
+                    after = sib.equals(child);
+                    continue;
+                }
+                if (!sib.isVisibleToUser()) continue;
+                Rect sb = new Rect();
+                sib.getBoundsInScreen(sb);
+                if (!Rect.intersects(sb, r)) continue;
+                cut(r, coverOf(sib, sb, pb));
+            }
+            child = parent;
+            parent = parent.getParent();
+        }
+        return r;
+    }
+
+    // A cover this much of a node's width (or height) counts as spanning it: floating tab bars
+    // are inset a little from the cards they sit on.
+    private static final float SPAN = 0.9f;
+
+    /** Removes `o` from `r` when `o` spans most of r's width or height; keeps the bigger side. */
+    private static void cut(Rect r, Rect o) {
+        if (!Rect.intersects(r, o)) return;
+        Rect i = new Rect(r);
+        i.intersect(o);
+        if (i.width() >= r.width() * SPAN) {
+            int above = Math.max(0, o.top - r.top), below = Math.max(0, r.bottom - o.bottom);
+            if (above == 0 && below == 0) r.setEmpty();
+            else if (above >= below) r.bottom = o.top;
+            else r.top = o.bottom;
+        } else if (i.height() >= r.height() * SPAN) {
+            int left = Math.max(0, o.left - r.left), right = Math.max(0, r.right - o.right);
+            if (left == 0 && right == 0) r.setEmpty();
+            else if (left >= right) r.right = o.left;
+            else r.left = o.right;
+        }
     }
 
     /**

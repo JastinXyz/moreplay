@@ -32,6 +32,7 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] Faster scroll (directional scroll actions, end-of-list detection), ~2x faster per scroll
 - [x] Read all interactive windows (dialogs, popups, permission prompts) + keyboard flag
 - [x] Skip screens covered by a later full-size sibling (React Navigation stacks), found dogfooding
+- [x] Tap the visible part of a target half under a bar; `covered` flag when hidden
 - [ ] Test on Android 11-13 and a non-rooted device; handle hidden-API drift per version
 - [ ] WebView: detect and fall back to CDP
 
