@@ -91,6 +91,10 @@ bounds side by side (each fit into 96x96, left to right in the order asked), so 
 see what unlabeled icons are for ~40 tokens instead of a full screenshot. Nothing is saved.
 Agent endpoint: `GET /crops?refs=0,6,7&size=96&q=80`.
 
+WebView: Chromium exposes the page through accessibility, so web content shows up in observe
+like native views (`View "OPEN BRAVE SEARCH" tap`, `EditText #searchbox` from the HTML id);
+tap, type, scroll and wait_for work on it unchanged. Tested on an Android WebView app.
+
 Tap points: `[x,y]` of a tap target is the center of its visible part, not of its bounds. Later
 siblings of the node or of its ancestors (a bottom tab bar, a floating tab bar, a sheet) are cut
 away when they span at least 90% of its width or height; a later sibling that fills its parent
@@ -110,9 +114,12 @@ system reports only the popup, so the activity behind it does not appear.
 Covered screens: JS navigators (React Navigation, Flutter) keep earlier screens mounted as
 full-size siblings under the current one, and accessibility reports them as visible. When a
 later sibling fills its parent and its content (text, descriptions, controls) spans at least
-half the parent's height, the siblings before it are skipped by observe and by selectors. A
-full-size layer holding only a small button does not count. Found on a PIN screen over a home
-screen: observe went from 52 lines to 15, and `tap: Beranda` no longer hits the hidden screen.
+half the parent's height, each earlier sibling whose content lies at least half under that
+content is skipped by observe and by selectors. A full-size layer holding only a small button
+does not count, and a sibling beside the cover's content stays (an interstitial ad fills the
+WebView but its content starts below the "Lanjut ke aplikasi" header). Found on a PIN screen
+over a home screen: observe went from 52 lines to 15, and `tap: Beranda` no longer hits the
+hidden screen.
 
 Scroll: picks the biggest scrollable node offering the directional action
 (ACTION_SCROLL_DOWN/UP/LEFT/RIGHT) in the top-most window that has one, else the biggest

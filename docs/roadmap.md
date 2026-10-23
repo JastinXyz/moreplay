@@ -35,7 +35,9 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] Tap the visible part of a target half under a bar; fully hidden nodes omitted (bottom sheets)
 - [x] `icon` flag on unlabeled image buttons + `screenshot {refs}` crops to see them cheaply
 - [ ] Test on Android 11-13 and a non-rooted device; handle hidden-API drift per version
-- [ ] WebView: detect and fall back to CDP
+- [x] WebView: Chromium's accessibility tree covers web content (observe, tap, type, scroll
+  tested); CDP only matters for debuggable WebViews with an empty tree, so it waits for a real case
+- [ ] Optional steps in flows (interstitial ads and prompts that appear only sometimes)
 
 ## Launch
 
