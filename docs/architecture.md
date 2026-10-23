@@ -79,7 +79,9 @@ app=com.miui.calculator window="Kalkulator" keyboard=shown
 ```
 
 `@ref Class "label" #id [centerX,centerY] flags`. Text and content-desc of a pressable node's
-non-pressable descendants are folded into its label (deduplicated, max 100 chars), and those
+non-pressable descendants are folded into its label (deduplicated, max 100 chars; a part
+already contained in a longer one is dropped, since a content-desc often repeats its
+children's text), and those
 descendants get no line of their own. Non-pressable nodes appear only if they carry text or are
 editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled.
 
