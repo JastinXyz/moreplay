@@ -9,9 +9,13 @@ import type { StepResult } from "./device.js";
  *   - launch: com.app
  *   - tap: Masuk                      # same as {text: Masuk}
  *   - type: {field: Email, value: "${email}"}
+ * An optional top-level `dismiss: [Lanjut ke aplikasi, {id: close}]` lists things to tap away
+ * whenever they appear while a step waits (ads, prompts that show up only sometimes).
  */
 export interface FlowFile {
   name: string;
+  /** Tapped whenever they show up while a step waits: interstitial closes, permission prompts. */
+  dismiss?: (string | Record<string, unknown>)[];
   steps: Record<string, unknown>[];
 }
 
@@ -168,6 +172,13 @@ export function withWaits(steps: Step[], waitMs = DEFAULT_WAIT_MS): Step[] {
   });
 }
 
+/** Hands the flow's dismiss list to every step that waits for an element. */
+export function withDismiss(steps: Step[], dismiss: FlowFile["dismiss"]): Step[] {
+  if (!dismiss?.length) return steps;
+  const list = dismiss.map((d) => (typeof d === "string" ? { text: d } : d));
+  return steps.map((s) => (TARGETED.has(s.op) || s.op === "wait_for" ? { ...s, dismiss: list } : s));
+}
+
 export interface RunFlowOptions {
   vars?: Record<string, string>;
   evidenceDir: string;
@@ -185,7 +196,7 @@ export interface FlowRun {
 }
 
 export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOptions): Promise<FlowRun> {
-  const steps = withWaits(substitute(flow.steps.map(fromCompact), opts.vars ?? {}), opts.waitMs);
+  const steps = withDismiss(withWaits(substitute(flow.steps.map(fromCompact), opts.vars ?? {}), opts.waitMs), flow.dismiss);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
   const evidenceDir = join(opts.evidenceDir, safeFlowName(flow.name), stamp);
   const t0 = Date.now();

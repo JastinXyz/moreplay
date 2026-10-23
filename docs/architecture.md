@@ -91,6 +91,14 @@ bounds side by side (each fit into 96x96, left to right in the order asked), so 
 see what unlabeled icons are for ~40 tokens instead of a full screenshot. Nothing is saved.
 Agent endpoint: `GET /crops?refs=0,6,7&size=96&q=80`.
 
+Node cache: UiAutomation keeps a node cache in the agent process, and it is why reads are
+fast (a cold read of the launcher takes ~500 ms, a cached one ~40). Chromium does not always
+send a content-changed event (an ad's "Lanjut ke aplikasi" fading in stayed invisible to the
+agent for good), so the cache is cleared only where staleness matters and the cost hides:
+at most once a second while a step polls, and before an observe that follows a screen with
+a WebView. `type` waits up to 2 s for input focus after its tap, then focuses the matched
+editable node itself (web fields sometimes never report focus).
+
 WebView: Chromium exposes the page through accessibility, so web content shows up in observe
 like native views (`View "OPEN BRAVE SEARCH" tap`, `EditText #searchbox` from the HTML id);
 tap, type, scroll and wait_for work on it unchanged. Tested on an Android WebView app.
@@ -133,6 +141,7 @@ A flow is a YAML file in `DROIDREPLAY_FLOWS_DIR` (default `./flows`):
 
 ```yaml
 name: my-device
+dismiss: [Lanjut ke aplikasi, {id: close}]   # optional: tapped away whenever they appear
 steps:
   - launch: com.android.settings
   - tap: Perangkat saya          # short form = {text: ...}
@@ -153,5 +162,12 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   vars fail before anything runs), `wait: 5000` on targeted steps and `timeout: 5000` on
   wait_for/wait_gone, then one `executeSteps`. Screenshot steps first wait for the screen to
   settle (tree unchanged 400 ms). Evidence goes to `<evidence>/<flow>/<YYYYMMDD-HHMMSS>/`.
+- **Popups that come and go**: a step with `optional: true` is skipped (`skipped (not
+  found: ...)`, still ok) when its element does not show up within its wait. For things that
+  appear at unpredictable times (interstitial ads, permission prompts), the top-level
+  `dismiss` list goes to every targeted and wait_for step; while such a step polls, the agent
+  taps the first dismiss selector on screen, resets the step's wait, and notes
+  `(dismissed text="...")` in its output. Found on a WebView app whose ad appears seconds after
+  launch and shows "Lanjut ke aplikasi" only after a countdown.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).

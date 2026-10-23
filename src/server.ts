@@ -36,7 +36,7 @@ export async function startServer(): Promise<void> {
     "act",
     {
       description: [
-        "Run steps in order in ONE call; batch everything you can. Stops at the first failure. Returns the screen afterwards.",
+        "Run steps in order in ONE call; batch everything you can. Stops at the first failure (optional:true steps skip if target missing). Returns the screen afterwards.",
         "Target (tap/long_press/type/wait_*): ref | x,y | text (also matches content-desc; exact, else contains) | id | desc.",
         "Ops: tap, long_press{ms}, type{value, field?=label of field, submit?, append?} (no target = focused field),",
         "scroll{dir:down|up|left|right, until?:{text|id|desc}, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
@@ -82,7 +82,7 @@ export async function startServer(): Promise<void> {
         "record{name}: start saving every successful act step (refs become stable selectors). save / discard: end it.",
         "run{name, vars?}: replay; each step waits for its element; screenshot steps go to evidence/<flow>/<time>/.",
         "On failure returns the step number and the screen: fix with patch{name, index, steps} (steps:[] deletes), run again.",
-        "list, show{name}.",
+        "list, show{name}. Flow files may set dismiss:[text|{id}]: popups tapped away whenever they appear.",
       ].join("\n"),
       inputSchema: {
         action: z.enum(["record", "save", "discard", "run", "patch", "list", "show"]),

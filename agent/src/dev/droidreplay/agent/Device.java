@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.InputDevice;
@@ -71,6 +72,74 @@ final class Device {
         injectNoAnimWait = m;
     }
 
+    // The node cache is what makes reads fast (a cold read of the launcher takes ~500 ms instead
+    // of ~50), so it is only dropped where it can be stale and the cost is hidden.
+    private long lastClear;
+    private static final long CLEAR_EVERY_MS = 1000;
+    // Set by walk; the next observe re-reads a screen that had a WebView.
+    private boolean sawWebView;
+
+    /**
+     * Drops this process's cached accessibility nodes so the next read asks the app again, at
+     * most once per `everyMs`. Chromium (WebView) does not always send a content-changed event,
+     * e.g. when an ad's "Lanjut ke aplikasi" fades in, and the cache kept serving the tree
+     * without it. Waits call this while polling; observe calls it after a screen with a WebView.
+     */
+    private void clearCacheEvery(long everyMs) {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastClear < everyMs) return;
+        lastClear = now;
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                automation.clearCache();
+            } else {
+                Class<?> c = Class.forName("android.view.accessibility.AccessibilityInteractionClient");
+                Object client = c.getMethod("getInstance").invoke(null);
+                c.getMethod("clearCache").invoke(client);
+            }
+        } catch (Throwable ignored) {
+            // Best effort: without it reads may be stale, but they still work.
+        }
+    }
+
+    /** The step's element is not there (or hidden); an optional step is skipped instead of failing. */
+    static final class Missing extends IllegalStateException {
+        Missing(String message) {
+            super(message);
+        }
+    }
+
+    // What dismissAny tapped away during the current step, reported in its output.
+    private final List<String> dismissed = new ArrayList<>();
+
+    /**
+     * Taps the first of the step's "dismiss" selectors that is on screen (an interstitial's
+     * close, a permission prompt) and reports whether it did. Called while a step waits for its
+     * element, so things that pop up at unpredictable times get out of the way.
+     */
+    private boolean dismissAny(JSONObject s) throws Exception {
+        JSONArray list = s.optJSONArray("dismiss");
+        if (list == null) return false;
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject sel = list.optJSONObject(i);
+            if (sel == null || find(sel) == null) continue;
+            JSONObject keep = lastSel;
+            try {
+                tap(sel, false);
+            } catch (Missing e) {
+                continue; // found but covered
+            } finally {
+                lastSel = keep;
+            }
+            dismissed.add(describe(sel));
+            SystemClock.sleep(DISMISS_SETTLE_MS);
+            return true;
+        }
+        return false;
+    }
+
+    private static final long DISMISS_SETTLE_MS = 300;
+
     JSONObject run(JSONArray steps, boolean stopOnError) throws Exception {
         long t0 = SystemClock.uptimeMillis();
         JSONArray results = new JSONArray();
@@ -81,9 +150,20 @@ final class Device {
             long s0 = SystemClock.uptimeMillis();
             JSONObject r = new JSONObject().put("op", op);
             lastSel = null;
+            dismissed.clear();
             try {
-                r.put("ok", true).put("out", exec(op, step));
+                String out = exec(op, step);
+                if (!dismissed.isEmpty()) out += " (dismissed " + String.join(", ", dismissed) + ")";
+                r.put("ok", true).put("out", out);
                 if (lastSel != null) r.put("sel", lastSel);
+            } catch (Missing e) {
+                // Optional steps cover things that show up only sometimes (ads, prompts).
+                if (step.optBoolean("optional")) {
+                    r.put("ok", true).put("out", "skipped (" + e.getMessage() + ")");
+                } else {
+                    allOk = false;
+                    r.put("ok", false).put("error", e.getMessage());
+                }
             } catch (Exception e) {
                 allOk = false;
                 r.put("ok", false).put("error", e.getMessage() != null ? e.getMessage() : e.toString());
@@ -175,6 +255,8 @@ final class Device {
     private boolean skippedCovered;
 
     String observe() {
+        if (sawWebView) clearCacheEvery(0);
+        sawWebView = false;
         List<Win> wins = windows();
         refs.clear();
         skippedCovered = false;
@@ -209,6 +291,8 @@ final class Device {
             skippedCovered = true;
             return;
         }
+        CharSequence cls = n.getClassName();
+        if (cls != null && cls.toString().endsWith("WebView")) sawWebView = true;
         boolean pressable = n.isClickable() || n.isLongClickable() || n.isCheckable();
         boolean emit;
         String label;
@@ -426,12 +510,16 @@ final class Device {
         }
         if (s.has("x") && s.has("y")) return new int[]{s.optInt("x"), s.optInt("y")};
         AccessibilityNodeInfo n = find(s);
-        long deadline = SystemClock.uptimeMillis() + s.optLong("wait", 0);
+        long wait = s.optLong("wait", 0);
+        long deadline = SystemClock.uptimeMillis() + wait;
         while (n == null && SystemClock.uptimeMillis() < deadline) {
-            SystemClock.sleep(POLL_MS);
+            // Time spent on a popup does not count against the step's own wait.
+            if (dismissAny(s)) deadline = SystemClock.uptimeMillis() + wait;
+            else SystemClock.sleep(POLL_MS);
+            clearCacheEvery(CLEAR_EVERY_MS);
             n = find(s);
         }
-        if (n == null) throw new IllegalArgumentException("not found: " + describe(s));
+        if (n == null) throw new Missing("not found: " + describe(s));
         lastSel = new JSONObject();
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
         AccessibilityNodeInfo target = n;
@@ -439,7 +527,7 @@ final class Device {
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
         if (target == null) target = n;
         Rect r = visibleRect(target);
-        if (r.isEmpty()) throw new IllegalStateException(describe(s) + " is covered by another element (scroll it into view)");
+        if (r.isEmpty()) throw new Missing(describe(s) + " is covered by another element (scroll it into view)");
         return new int[]{r.centerX(), r.centerY()};
     }
 
@@ -652,7 +740,7 @@ final class Device {
             waitIdle(150, 1000);
             if (until == null) return "scrolled " + dir + " (" + how + ")";
         }
-        if (until != null) throw new IllegalStateException("not found after scrolling: " + describe(until));
+        if (until != null) throw new Missing("not found after scrolling: " + describe(until));
         return "scrolled " + dir;
     }
 
@@ -721,6 +809,8 @@ final class Device {
     }
 
     /** {"value":"..."} into the focused field, or first taps the field given by ref/x,y/id/desc/field (its text). */
+    private static final long FOCUS_WAIT_MS = 2000;
+
     private String type(JSONObject s) throws Exception {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
@@ -730,7 +820,21 @@ final class Device {
             tap(sel, false);
             SystemClock.sleep(150);
         }
+        // Focus can trail the tap, e.g. on a web page that is still loading.
+        long deadline = SystemClock.uptimeMillis() + FOCUS_WAIT_MS;
         field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        while ((field == null || !field.isEditable()) && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS);
+            field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        }
+        // Web fields sometimes never report input focus after a tap; focus the matched node.
+        if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc"))) {
+            AccessibilityNodeInfo n = find(sel);
+            if (n != null && n.isEditable()) {
+                n.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+                field = n;
+            }
+        }
         if (field == null || !field.isEditable()) throw new IllegalStateException("no focused text field");
         String value = s.optString("value");
         if (s.optBoolean("append", false) && field.getText() != null) value = field.getText() + value;
@@ -766,16 +870,19 @@ final class Device {
 
     // ---------------------------------------------------------------- waits
 
-    private String waitFor(JSONObject s, boolean gone) {
-        long deadline = SystemClock.uptimeMillis() + s.optLong("timeout", 5000);
+    private String waitFor(JSONObject s, boolean gone) throws Exception {
+        long timeout = s.optLong("timeout", 5000);
+        long deadline = SystemClock.uptimeMillis() + timeout;
         long t0 = SystemClock.uptimeMillis();
         while (true) {
             boolean present = find(s) != null;
             if (present != gone) return (gone ? "gone" : "found") + " after " + (SystemClock.uptimeMillis() - t0) + "ms";
             if (SystemClock.uptimeMillis() > deadline) {
-                throw new IllegalStateException("timeout waiting for " + (gone ? "gone: " : "") + describe(s));
+                throw new Missing("timeout waiting for " + (gone ? "gone: " : "") + describe(s));
             }
-            SystemClock.sleep(POLL_MS);
+            if (!gone && dismissAny(s)) deadline = SystemClock.uptimeMillis() + timeout;
+            else SystemClock.sleep(POLL_MS);
+            clearCacheEvery(CLEAR_EVERY_MS);
         }
     }
 
