@@ -171,9 +171,13 @@ final class Device {
         return sb.toString();
     }
 
+    // Set by walk when it skips something hidden under a bar or an overlay (sheet, backdrop).
+    private boolean skippedCovered;
+
     String observe() {
         List<Win> wins = windows();
         refs.clear();
+        skippedCovered = false;
         if (wins.isEmpty()) return "(no window)";
         StringBuilder sb = new StringBuilder();
         sb.append("app=").append(wins.get(0).root.getPackageName());
@@ -186,6 +190,7 @@ final class Device {
             if (wins.size() > 1) sb.append("-- ").append(w.name).append('\n');
             walk(w.root, sb, false, new ArrayList<>());
         }
+        if (skippedCovered) sb.append("(elements hidden under bars or overlays not listed)\n");
         return sb.toString();
     }
 
@@ -195,6 +200,15 @@ final class Device {
      */
     private void walk(AccessibilityNodeInfo n, StringBuilder sb, boolean absorbed, List<Rect> covers) {
         if (n == null || !n.isVisibleToUser()) return;
+        // Fully hidden under a later sibling (a sheet's backdrop, a dialog layer): nothing in
+        // it can be seen or tapped, so neither it nor its subtree is listed.
+        Rect vis = new Rect();
+        n.getBoundsInScreen(vis);
+        for (Rect c : covers) cut(vis, c);
+        if (vis.isEmpty() && !covers.isEmpty()) {
+            skippedCovered = true;
+            return;
+        }
         boolean pressable = n.isClickable() || n.isLongClickable() || n.isCheckable();
         boolean emit;
         String label;
@@ -217,16 +231,10 @@ final class Device {
         }
 
         if (emit) {
+            // Tap targets get the point a tap would actually reach: the center of the visible part.
             Rect r = new Rect();
-            n.getBoundsInScreen(r);
-            // Tap targets get the point a tap would actually reach, or the covered flag.
-            boolean covered = false;
-            if (pressable || n.isEditable()) {
-                Rect vis = new Rect(r);
-                for (Rect c : covers) cut(vis, c);
-                covered = vis.isEmpty();
-                if (!covered) r = vis;
-            }
+            if (pressable || n.isEditable()) r = vis;
+            else n.getBoundsInScreen(r);
             int ref = refs.size();
             String shortId = n.getViewIdResourceName();
             if (shortId != null) shortId = shortId.substring(shortId.indexOf('/') + 1);
@@ -248,7 +256,6 @@ final class Device {
             if (n.isCheckable()) sb.append(n.isChecked() ? " on" : " off");
             if (n.isSelected()) sb.append(" selected");
             if (!n.isEnabled()) sb.append(" disabled");
-            if (covered) sb.append(" covered");
             // No label to go by: tells the model a crop (screenshot refs) shows what it is.
             if (pressable && label.isEmpty() && hasImage(n, new int[] {50})) sb.append(" icon");
             sb.append('\n');
