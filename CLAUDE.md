@@ -106,6 +106,9 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
 - React Navigation keeps earlier screens mounted as full-size siblings and they still report
   `isVisibleToUser`. `firstUncovered` in `Device.java` skips siblings under a later one that
   fills the parent with content; every traversal (observe, text folding, selectors) uses it.
+- Bounds of a card under a (floating) tab bar include the hidden part, so its center can land on
+  the bar. Observe cuts later siblings top-down (`walk` passes `covers`), selectors use
+  `visibleRect` (walks up the parents). Keep the two in sync.
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's

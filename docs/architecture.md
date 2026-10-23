@@ -83,7 +83,14 @@ non-pressable descendants are folded into its label (deduplicated, max 100 chars
 already contained in a longer one is dropped, since a content-desc often repeats its
 children's text), and those
 descendants get no line of their own. Non-pressable nodes appear only if they carry text or are
-editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled.
+editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled, covered.
+
+Tap points: `[x,y]` of a tap target is the center of its visible part, not of its bounds. Later
+siblings of the node or of its ancestors (a bottom tab bar, a floating tab bar, a sheet) are cut
+away when they span at least 90% of its width or height; a later sibling that fills its parent
+covers only with its content. A target hidden entirely gets `covered`, and a selector tap on it
+fails with "covered by another element (scroll it into view)". Found on a card under a floating
+tab bar, where the bounds center hit the Scan QR button.
 
 Windows: observe and selectors cover every app-type window the system reports (activities,
 dialogs, popups, permission prompts) plus the active window, top-most first. With more than
