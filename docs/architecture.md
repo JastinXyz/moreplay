@@ -83,7 +83,7 @@ non-pressable descendants are folded into its label (deduplicated, max 100 chars
 already contained in a longer one is dropped, since a content-desc often repeats its
 children's text), and those
 descendants get no line of their own. Non-pressable nodes appear only if they carry text or are
-editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled, covered,
+editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled,
 icon (pressable, no label, an image or SVG inside).
 
 Icon crops: `screenshot {refs: [0, 6, 7]}` returns one small JPEG with those refs' visible
@@ -94,8 +94,10 @@ Agent endpoint: `GET /crops?refs=0,6,7&size=96&q=80`.
 Tap points: `[x,y]` of a tap target is the center of its visible part, not of its bounds. Later
 siblings of the node or of its ancestors (a bottom tab bar, a floating tab bar, a sheet) are cut
 away when they span at least 90% of its width or height; a later sibling that fills its parent
-covers only with its content. A target hidden entirely gets `covered`, and a selector tap on it
-fails with "covered by another element (scroll it into view)". Found on a card under a floating
+covers only with its content. A node hidden entirely (with its subtree) is not listed, and the
+output ends with `(elements hidden under bars or overlays not listed)`; a bottom sheet over the
+home screen went from 44 lines to 7. A selector tap on a hidden node fails with "covered by
+another element (scroll it into view)". Found on a card under a floating
 tab bar, where the bounds center hit the Scan QR button.
 
 Windows: observe and selectors cover every app-type window the system reports (activities,
