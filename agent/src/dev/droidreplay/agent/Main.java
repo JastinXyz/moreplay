@@ -28,6 +28,7 @@ import org.json.JSONObject;
  *   GET  /ping                                                    -> "pong <version>"
  *   POST /run         {"steps":[{op:...}], "stopOnError":true}  -> JSON results
  *   GET  /screenshot  ?max=1024&q=75                             -> image/jpeg
+ *   GET  /crops       ?refs=0,6,7&size=96&q=80                   -> image/jpeg (refs side by side)
  */
 public final class Main {
     // UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES: keep TalkBack & co alive.
@@ -132,6 +133,13 @@ public final class Main {
                 int max = Integer.parseInt(query.getOrDefault("max", "0"));
                 int quality = Integer.parseInt(query.getOrDefault("q", "80"));
                 respond(out, 200, "image/jpeg", device.screenshot(max, quality));
+            } else if (path.equals("/crops")) {
+                String[] parts = query.getOrDefault("refs", "").split(",");
+                int[] refs = new int[parts.length];
+                for (int i = 0; i < parts.length; i++) refs[i] = Integer.parseInt(parts[i].trim());
+                int size = Integer.parseInt(query.getOrDefault("size", "96"));
+                int quality = Integer.parseInt(query.getOrDefault("q", "80"));
+                respond(out, 200, "image/jpeg", device.crops(refs, size, quality));
             } else {
                 respond(out, 404, "text/plain", "not found".getBytes(StandardCharsets.UTF_8));
             }

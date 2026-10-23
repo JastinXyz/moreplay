@@ -123,8 +123,11 @@ export class Device {
     // "[n]" keeps pkill from matching (and killing) the shell that runs it.
     await this.shell(`pkill -f '${AGENT_CLASS.slice(0, -1)}[${AGENT_CLASS.slice(-1)}]'; true`);
     await this.pushJar(serial);
-    const { stdout } = await exec(this.adb, ["-s", serial, "forward", "tcp:0", `tcp:${DEVICE_PORT}`]);
-    this.port = Number(stdout.trim());
+    // After an agent crash the old forward still points at DEVICE_PORT; a new one would leak it.
+    if (!this.port) {
+      const { stdout } = await exec(this.adb, ["-s", serial, "forward", "tcp:0", `tcp:${DEVICE_PORT}`]);
+      this.port = Number(stdout.trim());
+    }
 
     this.agentLog = "";
     const child = spawn(this.adb, ["-s", serial, "shell", `CLASSPATH=${DEVICE_JAR} app_process / ${AGENT_CLASS} ${DEVICE_PORT}`]);
@@ -169,6 +172,14 @@ export class Device {
     await this.ensureAgent();
     const res = await fetch(`http://127.0.0.1:${this.port}/screenshot?max=${max}&q=${quality}`);
     if (!res.ok) throw new Error(`screenshot failed: ${await res.text()}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  /** Crops of @refs from the latest observe, side by side in one JPEG. */
+  async crops(refs: number[], size = 96): Promise<Buffer> {
+    await this.ensureAgent();
+    const res = await fetch(`http://127.0.0.1:${this.port}/crops?refs=${refs.join(",")}&size=${size}&q=80`);
+    if (!res.ok) throw new Error(`crops failed: ${await res.text()}`);
     return Buffer.from(await res.arrayBuffer());
   }
 

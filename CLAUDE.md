@@ -109,6 +109,11 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
 - Bounds of a card under a (floating) tab bar include the hidden part, so its center can land on
   the bar. Observe cuts later siblings top-down (`walk` passes `covers`), selectors use
   `visibleRect` (walks up the parents). Keep the two in sync.
+- `takeScreenshot()` returns a hardware bitmap: copy it to ARGB_8888 before drawing it on a
+  Canvas. And never `drawText` in the agent: app_process has no default Typeface and aborts
+  (SIGABRT in `Typeface::resolveDefault`), taking the agent down.
+- When the agent dies mid-session, `ensureAgent` restarts it and reuses the existing forward
+  (a new `adb forward tcp:0` per restart leaked the old one).
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's

@@ -2,6 +2,9 @@ package dev.droidreplay.agent;
 
 import android.app.UiAutomation;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -41,13 +44,15 @@ final class Device {
     /** What observe saw for one @ref: where to tap and how to find it again later. */
     private static final class Ref {
         final int x, y;
+        final Rect bounds;     // visible part, for crops
         final String id;       // short resource id (after ":id/"), or null
         final String text;     // first label part, or null
         final boolean ownText; // text comes from the node itself, not a folded-in child
 
-        Ref(int x, int y, String id, String text, boolean ownText) {
-            this.x = x;
-            this.y = y;
+        Ref(Rect bounds, String id, String text, boolean ownText) {
+            this.x = bounds.centerX();
+            this.y = bounds.centerY();
+            this.bounds = bounds;
             this.id = id;
             this.text = text;
             this.ownText = ownText;
@@ -228,7 +233,7 @@ final class Device {
             Set<String> own = new LinkedHashSet<>();
             addText(n, own);
             String firstPart = label.isEmpty() ? null : label.split(" · ")[0];
-            refs.put(ref, new Ref(r.centerX(), r.centerY(), shortId, firstPart, !own.isEmpty()));
+            refs.put(ref, new Ref(r, shortId, firstPart, !own.isEmpty()));
             sb.append('@').append(ref).append(' ').append(shortClass(n.getClassName()));
             if (!label.isEmpty()) sb.append(" \"").append(label).append('"');
             String id = n.getViewIdResourceName();
@@ -244,6 +249,8 @@ final class Device {
             if (n.isSelected()) sb.append(" selected");
             if (!n.isEnabled()) sb.append(" disabled");
             if (covered) sb.append(" covered");
+            // No label to go by: tells the model a crop (screenshot refs) shows what it is.
+            if (pressable && label.isEmpty() && hasImage(n, new int[] {50})) sb.append(" icon");
             sb.append('\n');
         }
         // Children of a pressable node had their text folded in above; only their own actions show.
@@ -275,6 +282,14 @@ final class Device {
             }
             walk(kids[i], sb, childAbsorbed, mine);
         }
+    }
+
+    private static boolean hasImage(AccessibilityNodeInfo n, int[] budget) {
+        if (n == null || budget[0]-- <= 0) return false;
+        CharSequence cls = n.getClassName();
+        if (cls != null && (cls.toString().contains("Image") || cls.toString().contains("Svg"))) return true;
+        for (int i = 0; i < n.getChildCount(); i++) if (hasImage(n.getChild(i), budget)) return true;
+        return false;
     }
 
     /** What a later sibling hides: its bounds, or only its content when it fills the parent. */
@@ -783,6 +798,43 @@ final class Device {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         bmp.compress(Bitmap.CompressFormat.JPEG, quality, out);
         bmp.recycle();
+        return out.toByteArray();
+    }
+
+    private static final int CROP_PAD = 8;
+    private static final int CROP_GAP = 6;
+
+    /**
+     * Crops of the given @refs from the latest observe, side by side in one JPEG in the order
+     * asked, each fit into a size x size box. Lets a model see unlabeled icons for a few tokens
+     * instead of a full screenshot. No "@n" text on the image: app_process has no default
+     * Typeface, and drawText aborts the process.
+     */
+    byte[] crops(int[] wanted, int size, int quality) {
+        for (int ref : wanted) if (!refs.containsKey(ref)) throw new IllegalArgumentException("unknown ref @" + ref + " (observe again)");
+        Bitmap shot = automation.takeScreenshot();
+        if (shot == null) throw new IllegalStateException("screenshot failed (secure window?)");
+        // takeScreenshot returns a hardware bitmap, which a software Canvas cannot draw.
+        Bitmap screen = shot.copy(Bitmap.Config.ARGB_8888, false);
+        shot.recycle();
+        Bitmap strip = Bitmap.createBitmap(wanted.length * (size + CROP_GAP) - CROP_GAP, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(strip);
+        canvas.drawColor(Color.DKGRAY);
+        Paint smooth = new Paint(Paint.FILTER_BITMAP_FLAG);
+        for (int i = 0; i < wanted.length; i++) {
+            Rect src = new Rect(refs.get(wanted[i]).bounds);
+            src.inset(-CROP_PAD, -CROP_PAD);
+            if (!src.intersect(0, 0, screen.getWidth(), screen.getHeight())) continue;
+            float f = Math.min(1f, Math.min((float) size / src.width(), (float) size / src.height()));
+            int w = Math.round(src.width() * f), h = Math.round(src.height() * f);
+            int left = i * (size + CROP_GAP) + (size - w) / 2;
+            int top = (size - h) / 2;
+            canvas.drawBitmap(screen, src, new Rect(left, top, left + w, top + h), smooth);
+        }
+        screen.recycle();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        strip.compress(Bitmap.CompressFormat.JPEG, quality, out);
+        strip.recycle();
         return out.toByteArray();
     }
 }
