@@ -50,6 +50,7 @@ sets where screenshots go (default `./evidence`); `DROIDREPLAY_FLOWS_DIR` where 
 ```yaml
 # flows/login.yaml
 name: login
+dismiss: [Nanti saja]          # tapped away whenever it shows up (ads, prompts)
 steps:
   - launch: com.example.app
   - tap: Masuk

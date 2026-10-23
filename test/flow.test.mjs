@@ -131,3 +131,27 @@ test("flows save to and load from YAML files", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("optional steps survive recording and the YAML round trip, and a skip passes the flow", async () => {
+  const step = { op: "tap", text: "Lanjut ke aplikasi", optional: true };
+  const recorded = toRecorded({ ...step, wait: 5000 }, { op: "tap", ok: true, ms: 1, out: "skipped (not found)" });
+  assert.deepEqual(recorded, step);
+  assert.deepEqual(fromCompact(toCompact(recorded)), step);
+
+  // The agent reports a skipped optional step as ok, so the flow goes on.
+  const d = fakeDevice((s) => (s.optional ? { ok: true, out: "skipped (not found: text=\"Lanjut ke aplikasi\")" } : { ok: true, out: "done" }));
+  const run = await runFlow(d, { name: "ad", steps: [{ tap: { text: "Lanjut ke aplikasi", optional: true } }, { tap: "Home" }] }, { evidenceDir: tmpdir() });
+  assert.equal(run.ok, true);
+  assert.match(run.text, /1\. ✓ tap 1ms skipped/);
+  assert.equal(d.batches[0][0].wait, 5000, "optional steps still wait for their element");
+});
+
+test("a flow's dismiss list goes to every step that waits for an element", async () => {
+  const d = fakeDevice();
+  await runFlow(d, { name: "ad", dismiss: ["Lanjut ke aplikasi", { id: "close" }], steps: [{ launch: "com.app" }, { tap: "Home" }, { wait_for: "Done" }, { key: "back" }] }, { evidenceDir: tmpdir() });
+  const sent = d.batches.flat();
+  const list = [{ text: "Lanjut ke aplikasi" }, { id: "close" }];
+  assert.deepEqual(sent.find((s) => s.op === "tap").dismiss, list);
+  assert.deepEqual(sent.find((s) => s.op === "wait_for").dismiss, list);
+  assert.equal(sent.find((s) => s.op === "key").dismiss, undefined);
+});

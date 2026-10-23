@@ -111,6 +111,10 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
 - Bounds of a card under a (floating) tab bar include the hidden part, so its center can land on
   the bar. Observe cuts later siblings top-down (`walk` passes `covers`), selectors use
   `visibleRect` (walks up the parents). Keep the two in sync.
+- The agent's accessibility node cache can go stale for good on WebView content (no
+  content-changed event), but clearing it on every read made observe ~10x slower. It is
+  cleared only while polling (`clearCacheEvery(1000)`) and before an observe after a screen
+  with a WebView (`sawWebView`). Benchmark the launcher after touching this.
 - `takeScreenshot()` returns a hardware bitmap: copy it to ARGB_8888 before drawing it on a
   Canvas. And never `drawText` in the agent: app_process has no default Typeface and aborts
   (SIGABRT in `Typeface::resolveDefault`), taking the agent down.

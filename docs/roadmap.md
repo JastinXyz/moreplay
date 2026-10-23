@@ -37,7 +37,7 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [ ] Test on Android 11-13 and a non-rooted device; handle hidden-API drift per version
 - [x] WebView: Chromium's accessibility tree covers web content (observe, tap, type, scroll
   tested); CDP only matters for debuggable WebViews with an empty tree, so it waits for a real case
-- [ ] Optional steps in flows (interstitial ads and prompts that appear only sometimes)
+- [x] Optional steps and a flow-level `dismiss` list (interstitial ads, prompts that appear only sometimes)
 
 ## Launch
 
