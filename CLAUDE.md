@@ -61,6 +61,9 @@ node spike/bench.mjs   # timing against a connected device (taps nothing)
 ```
 
 Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11+, Node 20+.
+On the owner's Mac: `ANDROID_HOME=~/Library/Android/sdk` (platform 35 + build-tools 35.0.0,
+installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`, since
+`assets/droidreplay.jar` from the last build is reused.
 
 ## Working rules
 
@@ -100,6 +103,9 @@ Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11
   call it the end. The agent waits for the tree to change first (`waitChange`).
 - While a popup/dialog is modal, `getWindows()` returns only it; the activity behind is
   genuinely not reported. Use the `windows` debug op to see what the system lists.
+- React Navigation keeps earlier screens mounted as full-size siblings and they still report
+  `isVisibleToUser`. `firstUncovered` in `Device.java` skips siblings under a later one that
+  fills the parent with content; every traversal (observe, text folding, selectors) uses it.
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's

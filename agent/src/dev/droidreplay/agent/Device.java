@@ -239,7 +239,50 @@ final class Device {
         }
         // Children of a pressable node had their text folded in above; only their own actions show.
         boolean childAbsorbed = absorbed || pressable;
-        for (int i = 0; i < n.getChildCount(); i++) walk(n.getChild(i), sb, childAbsorbed);
+        for (int i = firstUncovered(n); i < n.getChildCount(); i++) walk(n.getChild(i), sb, childAbsorbed);
+    }
+
+    // How much of the parent's height a covering child's content must span to count as a screen.
+    private static final float COVER_SPAN = 0.5f;
+    private static final int COVER_SCAN_LIMIT = 300;
+
+    /**
+     * Index of the first child worth walking. JS navigators (React Navigation, Flutter's
+     * Navigator) keep earlier screens mounted as full-size siblings below the current one, and
+     * accessibility still reports them as visible. A later child that fills the parent and has
+     * content spread over at least half of it hides every sibling before it. A full-size layer
+     * holding only a small button (a FAB host, a toast) does not count.
+     */
+    private static int firstUncovered(AccessibilityNodeInfo n) {
+        int count = n.getChildCount();
+        if (count < 2) return 0;
+        Rect parent = new Rect();
+        n.getBoundsInScreen(parent);
+        if (parent.isEmpty()) return 0;
+        for (int i = count - 1; i > 0; i--) {
+            AccessibilityNodeInfo c = n.getChild(i);
+            if (c == null || !c.isVisibleToUser()) continue;
+            Rect r = new Rect();
+            c.getBoundsInScreen(r);
+            if (!r.contains(parent)) continue;
+            Rect content = new Rect();
+            contentBounds(c, content, new int[] {COVER_SCAN_LIMIT});
+            if (content.height() >= parent.height() * COVER_SPAN) return i;
+        }
+        return 0;
+    }
+
+    /** Union of the bounds of nodes a user would see as content: text, descriptions, controls. */
+    private static void contentBounds(AccessibilityNodeInfo n, Rect out, int[] budget) {
+        if (n == null || budget[0]-- <= 0 || !n.isVisibleToUser()) return;
+        CharSequence t = n.getText();
+        CharSequence d = n.getContentDescription();
+        if ((t != null && t.length() > 0) || (d != null && d.length() > 0) || n.isClickable() || n.isEditable()) {
+            Rect r = new Rect();
+            n.getBoundsInScreen(r);
+            out.union(r);
+        }
+        for (int i = 0; i < n.getChildCount(); i++) contentBounds(n.getChild(i), out, budget);
     }
 
     private static void addText(AccessibilityNodeInfo n, Set<String> parts) {
@@ -250,7 +293,7 @@ final class Device {
     }
 
     private static void collectText(AccessibilityNodeInfo n, Set<String> parts) {
-        for (int i = 0; i < n.getChildCount(); i++) {
+        for (int i = firstUncovered(n); i < n.getChildCount(); i++) {
             AccessibilityNodeInfo c = n.getChild(i);
             if (c == null || !c.isVisibleToUser()) continue;
             if (c.isClickable() || c.isCheckable()) continue; // gets its own line
@@ -339,7 +382,7 @@ final class Device {
     private static void flatten(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out) {
         if (n == null || !n.isVisibleToUser()) return;
         out.add(n);
-        for (int i = 0; i < n.getChildCount(); i++) flatten(n.getChild(i), out);
+        for (int i = firstUncovered(n); i < n.getChildCount(); i++) flatten(n.getChild(i), out);
     }
 
     /** 2 = exact match, 1 = contains match (text/desc only), 0 = no match. */
