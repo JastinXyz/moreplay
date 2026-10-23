@@ -90,6 +90,13 @@ one window each gets a `-- <title>` header; with one, its title is on the first 
 only flagged as `keyboard=shown` (`type` sets text directly). While a modal popup is open the
 system reports only the popup, so the activity behind it does not appear.
 
+Covered screens: JS navigators (React Navigation, Flutter) keep earlier screens mounted as
+full-size siblings under the current one, and accessibility reports them as visible. When a
+later sibling fills its parent and its content (text, descriptions, controls) spans at least
+half the parent's height, the siblings before it are skipped by observe and by selectors. A
+full-size layer holding only a small button does not count. Found on a PIN screen over a home
+screen: observe went from 52 lines to 15, and `tap: Beranda` no longer hits the hidden screen.
+
 Scroll: picks the biggest scrollable node offering the directional action
 (ACTION_SCROLL_DOWN/UP/LEFT/RIGHT) in the top-most window that has one, else the biggest
 scrollable; performs the action, or swipes inside that node when the action is refused. It
