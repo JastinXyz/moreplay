@@ -303,7 +303,21 @@ final class Device {
     }
 
     private static String join(Set<String> parts) {
-        String s = String.join(" · ", parts).replace('\n', ' ').replace("\"", "'");
+        // A content-desc often repeats its children's text ("Kelas 7 - A, Geografi, 10:39"
+        // over "Kelas 7 - A" and "Geografi"); keep only parts no other part already contains.
+        List<String> kept = new ArrayList<>();
+        for (String p : parts) {
+            String lp = p.toLowerCase(Locale.ROOT);
+            boolean contained = false;
+            for (String q : parts) {
+                if (q != p && q.length() > p.length() && q.toLowerCase(Locale.ROOT).contains(lp)) {
+                    contained = true;
+                    break;
+                }
+            }
+            if (!contained) kept.add(p);
+        }
+        String s = String.join(" · ", kept).replace('\n', ' ').replace("\"", "'");
         return s.length() > MAX_LABEL ? s.substring(0, MAX_LABEL) + "…" : s;
     }
 
