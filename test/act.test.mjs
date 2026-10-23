@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAct, fmt } from "../dist/act.js";
+import { runAct, fmt, withActWaits } from "../dist/act.js";
 
 /** Fake device: records every call, answers agent steps with ok unless the op is in `fail`. */
 function fakeDevice({ fail = [], shell = {} } = {}) {
@@ -97,4 +97,22 @@ test("fmt puts multi-line output below the status line", () => {
   assert.equal(fmt({ op: "tap", ok: true, ms: 5, out: "tapped 1,2" }), "✓ tap 5ms tapped 1,2");
   assert.equal(fmt({ op: "observe", ok: true, ms: 5, out: "a\nb\n" }), "✓ observe 5ms\na\nb");
   assert.equal(fmt({ op: "tap", ok: false, ms: 5, error: "nope" }), "✗ tap 5ms nope");
+});
+
+test("selector steps after the first wait briefly for their element; refs and points do not", () => {
+  const out = withActWaits([
+    { op: "tap", text: "Keuangan" },
+    { op: "tap", text: "Tabungan" },
+    { op: "type", field: "Cari", value: "x" },
+    { op: "tap", ref: 3 },
+    { op: "tap", x: 1, y: 2 },
+    { op: "tap", text: "A", wait: 0 },
+  ]);
+  assert.deepEqual(out.map((s) => s.wait), [undefined, 3000, 3000, undefined, undefined, 0]);
+});
+
+test("recording gets the steps as given, without the implicit wait", async () => {
+  const seen = [];
+  await runAct(fakeDevice(), [{ op: "tap", text: "A" }, { op: "tap", text: "B" }], { ...opts, onSuccess: (s) => seen.push(s) });
+  assert.deepEqual(seen, [{ op: "tap", text: "A" }, { op: "tap", text: "B" }]);
 });

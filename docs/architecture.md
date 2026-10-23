@@ -68,7 +68,9 @@ text/id/desc target until it appears; replays set it on every targeted step.
 
 The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server ops, executes them in order,
 stops at the first failure, then (unless `observe_after: false`) waits for idle and appends the
-screen.
+screen. Every tap/long_press/type after the first that targets `text`, `id`, `desc` or `field`
+gets `wait: 3000`, because a step that opens a sheet returns before the sheet's content is in
+the tree. `ref` and `x,y` targets do not wait, and recording keeps the steps as given.
 
 ## Observe format
 
@@ -84,7 +86,8 @@ already contained in a longer one is dropped, since a content-desc often repeats
 children's text), and those
 descendants get no line of their own. Non-pressable nodes appear only if they carry text or are
 editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled,
-icon (pressable, no label, an image or SVG inside).
+icon (pressable, no label, an image or SVG inside). Editable fields add `hint="..."`; an empty
+field reports its hint as its text, so it shows only the hint (`EditText hint="Cari.."`).
 
 Icon crops: `screenshot {refs: [0, 6, 7]}` returns one small JPEG with those refs' visible
 bounds side by side (each fit into 96x96, left to right in the order asked), so a model can
