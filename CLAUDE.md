@@ -104,8 +104,10 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
 - While a popup/dialog is modal, `getWindows()` returns only it; the activity behind is
   genuinely not reported. Use the `windows` debug op to see what the system lists.
 - React Navigation keeps earlier screens mounted as full-size siblings and they still report
-  `isVisibleToUser`. `firstUncovered` in `Device.java` skips siblings under a later one that
-  fills the parent with content; every traversal (observe, text folding, selectors) uses it.
+  `isVisibleToUser`. `coveredScreens` in `Device.java` skips earlier siblings whose content
+  mostly lies under the content of a later one that fills the parent; every traversal
+  (observe, text folding, selectors) uses it. Compare content, not bounds: an ad container
+  fills the WebView but starts below its "Lanjut ke aplikasi" header.
 - Bounds of a card under a (floating) tab bar include the hidden part, so its center can land on
   the bar. Observe cuts later siblings top-down (`walk` passes `covers`), selectors use
   `visibleRect` (walks up the parents). Keep the two in sync.

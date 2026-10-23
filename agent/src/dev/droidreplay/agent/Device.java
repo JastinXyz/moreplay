@@ -263,9 +263,9 @@ final class Device {
         // Children of a pressable node had their text folded in above; only their own actions show.
         boolean childAbsorbed = absorbed || pressable;
         int count = n.getChildCount();
-        int first = firstUncovered(n);
-        if (count - first < 2) {
-            for (int i = first; i < count; i++) walk(n.getChild(i), sb, childAbsorbed, covers);
+        boolean[] hidden = coveredScreens(n);
+        if (count < 2) {
+            for (int i = 0; i < count; i++) walk(n.getChild(i), sb, childAbsorbed, covers);
             return;
         }
         // Same covers as visibleRect, computed once per parent instead of per node.
@@ -274,15 +274,17 @@ final class Device {
         AccessibilityNodeInfo[] kids = new AccessibilityNodeInfo[count];
         Rect[] bounds = new Rect[count];
         Rect[] cover = new Rect[count];
-        for (int i = first; i < count; i++) {
+        for (int i = 0; i < count; i++) {
+            if (hidden != null && hidden[i]) continue;
             kids[i] = n.getChild(i);
             bounds[i] = new Rect();
             if (kids[i] != null && kids[i].isVisibleToUser()) kids[i].getBoundsInScreen(bounds[i]);
         }
-        for (int i = first; i < count; i++) {
+        for (int i = 0; i < count; i++) {
+            if (kids[i] == null) continue;
             List<Rect> mine = covers;
             for (int j = i + 1; j < count; j++) {
-                if (bounds[j].isEmpty() || !Rect.intersects(bounds[i], bounds[j])) continue;
+                if (bounds[j] == null || bounds[j].isEmpty() || !Rect.intersects(bounds[i], bounds[j])) continue;
                 if (cover[j] == null) cover[j] = coverOf(kids[j], bounds[j], pb);
                 if (mine == covers) mine = new ArrayList<>(covers);
                 mine.add(cover[j]);
@@ -311,30 +313,45 @@ final class Device {
     private static final float COVER_SPAN = 0.5f;
     private static final int COVER_SCAN_LIMIT = 300;
 
+    // How much of an earlier sibling's content must sit under the cover's content to hide it.
+    private static final float COVER_OVERLAP = 0.5f;
+
     /**
-     * Index of the first child worth walking. JS navigators (React Navigation, Flutter's
-     * Navigator) keep earlier screens mounted as full-size siblings below the current one, and
-     * accessibility still reports them as visible. A later child that fills the parent and has
-     * content spread over at least half of it hides every sibling before it. A full-size layer
-     * holding only a small button (a FAB host, a toast) does not count.
+     * Children to skip, or null. JS navigators (React Navigation, Flutter's Navigator) keep
+     * earlier screens mounted as full-size siblings below the current one, and accessibility
+     * still reports them as visible. A later child that fills the parent and has content spread
+     * over at least half of it hides the siblings before it whose content mostly lies under
+     * its content. A full-size layer holding only a small button (a FAB host, a toast) does not
+     * count, and neither does a sibling beside the cover's content: a full-size ad container
+     * whose content starts below a header leaves that header visible.
      */
-    private static int firstUncovered(AccessibilityNodeInfo n) {
+    private static boolean[] coveredScreens(AccessibilityNodeInfo n) {
         int count = n.getChildCount();
-        if (count < 2) return 0;
+        if (count < 2) return null;
         Rect parent = new Rect();
         n.getBoundsInScreen(parent);
-        if (parent.isEmpty()) return 0;
+        if (parent.isEmpty()) return null;
         for (int i = count - 1; i > 0; i--) {
             AccessibilityNodeInfo c = n.getChild(i);
             if (c == null || !c.isVisibleToUser()) continue;
             Rect r = new Rect();
             c.getBoundsInScreen(r);
             if (!r.contains(parent)) continue;
-            Rect content = new Rect();
-            contentBounds(c, content, new int[] {COVER_SCAN_LIMIT});
-            if (content.height() >= parent.height() * COVER_SPAN) return i;
+            Rect cover = new Rect();
+            contentBounds(c, cover, new int[] {COVER_SCAN_LIMIT});
+            if (cover.height() < parent.height() * COVER_SPAN) continue;
+            boolean[] hidden = new boolean[count];
+            for (int k = 0; k < i; k++) {
+                Rect content = new Rect();
+                contentBounds(n.getChild(k), content, new int[] {COVER_SCAN_LIMIT});
+                Rect overlap = new Rect();
+                // Empty siblings hide nothing either way; skipping them saves the walk.
+                hidden[k] = content.isEmpty() || (overlap.setIntersect(content, cover)
+                        && (long) overlap.width() * overlap.height() >= COVER_OVERLAP * content.width() * content.height());
+            }
+            return hidden;
         }
-        return 0;
+        return null;
     }
 
     /** Union of the bounds of nodes a user would see as content: text, descriptions, controls. */
@@ -358,7 +375,9 @@ final class Device {
     }
 
     private static void collectText(AccessibilityNodeInfo n, Set<String> parts) {
-        for (int i = firstUncovered(n); i < n.getChildCount(); i++) {
+        boolean[] hidden = coveredScreens(n);
+        for (int i = 0; i < n.getChildCount(); i++) {
+            if (hidden != null && hidden[i]) continue;
             AccessibilityNodeInfo c = n.getChild(i);
             if (c == null || !c.isVisibleToUser()) continue;
             if (c.isClickable() || c.isCheckable()) continue; // gets its own line
@@ -518,7 +537,8 @@ final class Device {
     private static void flatten(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out) {
         if (n == null || !n.isVisibleToUser()) return;
         out.add(n);
-        for (int i = firstUncovered(n); i < n.getChildCount(); i++) flatten(n.getChild(i), out);
+        boolean[] hidden = coveredScreens(n);
+        for (int i = 0; i < n.getChildCount(); i++) if (hidden == null || !hidden[i]) flatten(n.getChild(i), out);
     }
 
     /** 2 = exact match, 1 = contains match (text/desc only), 0 = no match. */
