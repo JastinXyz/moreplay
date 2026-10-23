@@ -83,7 +83,13 @@ non-pressable descendants are folded into its label (deduplicated, max 100 chars
 already contained in a longer one is dropped, since a content-desc often repeats its
 children's text), and those
 descendants get no line of their own. Non-pressable nodes appear only if they carry text or are
-editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled, covered.
+editable/scrollable. Flags: tap, edit, scroll, on/off (checkable), selected, disabled, covered,
+icon (pressable, no label, an image or SVG inside).
+
+Icon crops: `screenshot {refs: [0, 6, 7]}` returns one small JPEG with those refs' visible
+bounds side by side (each fit into 96x96, left to right in the order asked), so a model can
+see what unlabeled icons are for ~40 tokens instead of a full screenshot. Nothing is saved.
+Agent endpoint: `GET /crops?refs=0,6,7&size=96&q=80`.
 
 Tap points: `[x,y]` of a tap target is the center of its visible part, not of its bounds. Later
 siblings of the node or of its ancestors (a bottom tab bar, a floating tab bar, a sheet) are cut

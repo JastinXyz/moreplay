@@ -59,9 +59,14 @@ export async function startServer(): Promise<void> {
       inputSchema: {
         name: z.string().optional().describe("file name, e.g. TC-03-login-ok"),
         show: z.boolean().optional(),
+        refs: z.array(z.number().int()).optional().describe("instead: small crops of these @refs (e.g. icon), nothing saved"),
       },
     },
-    async ({ name, show }) => {
+    async ({ name, show, refs }) => {
+      if (refs?.length) {
+        const img = await device.crops(refs);
+        return { content: [{ type: "text" as const, text: `crops of ${refs.map((r) => `@${r}`).join(" ")}, left to right` }, { type: "image" as const, data: img.toString("base64"), mimeType: "image/jpeg" }] };
+      }
       const path = await saveScreenshot(device, evidenceDir, name);
       if (!show) return text(path);
       const img = await device.screenshot(1024, 70);

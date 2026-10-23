@@ -10,6 +10,8 @@ test("exposes 4 tools and keeps their definitions small", async () => {
   try {
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((t) => t.name).sort(), ["act", "flow", "observe", "screenshot"]);
+    const shot = tools.find((t) => t.name === "screenshot");
+    assert.ok(shot.inputSchema.properties.refs, "screenshot takes refs for icon crops");
     // Tool definitions are re-sent with every request; a budget keeps them from creeping up.
     const chars = JSON.stringify(tools).length;
     assert.ok(chars < 3200, `tool definitions grew to ${chars} chars (~${Math.round(chars / 4)} tokens)`);
