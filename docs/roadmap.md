@@ -43,5 +43,6 @@ Status as of the latest merged PR. Move items to Done when they land.
 
 ## Launch
 
-- [ ] README demo GIF + benchmark table
+- [x] README benchmark table (from `spike/RESULTS.md`)
+- [ ] README demo GIF
 - [ ] Make the GitHub repo public, publish to npm, post to communities

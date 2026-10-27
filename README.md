@@ -1,83 +1,190 @@
 # droidreplay
 
-Fast Android MCP server. Let the AI walk a flow once, then replay it with no model at all. An 11 KB agent runs on the device through `app_process` (no APK to
-install) and keeps one UiAutomation connection open, so reading the screen takes ~30 ms
-instead of ~3 s, and a whole batch of steps runs in one request.
+[![npm](https://img.shields.io/npm/v/droidreplay)](https://www.npmjs.com/package/droidreplay)
+[![CI](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml/badge.svg)](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Requirements
+Let an AI assistant use your Android phone. It can read the screen, tap, type and scroll, and
+once it has done a task, you can save the steps and replay them later without the AI.
 
-- Node 20+, `adb` (uses `$ANDROID_HOME/platform-tools/adb` when set)
-- An Android device with USB debugging on. Xiaomi/HyperOS also needs
-  "USB debugging (Security settings)" for input injection.
-- To build the agent: JDK 11+ and an Android SDK platform + build-tools.
+droidreplay is an [MCP](https://modelcontextprotocol.io) server: a plugin that gives AI apps
+such as Claude Code, Claude Desktop or Cursor new tools. This one gives them an Android phone.
 
-## Build and run
+- **Fast.** Reading the screen takes about 50 ms, not the usual 3 seconds.
+- **Cheap on tokens.** A screen is 1-2 KB of text, and the tools add only ~800 tokens to each request.
+- **Record once, replay for free.** Save what the AI did as a small YAML file and run it again
+  with one command, no AI needed. Handy for repeating manual tests.
+
+## Quick start
+
+### 1. What you need
+
+- A computer with [Node.js](https://nodejs.org) 20 or newer.
+- `adb`, the tool that talks to Android phones:
+  - macOS: `brew install android-platform-tools`
+  - Windows / Linux: download [SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+    and add the folder to your `PATH`.
+- An Android phone (Android 8 or newer) and a USB cable. An emulator works too.
+
+### 2. Turn on USB debugging
+
+1. On the phone, open **Settings > About phone** and tap **Build number** seven times. This
+   unlocks **Developer options**.
+2. Open **Developer options** and turn on **USB debugging**.
+   - Xiaomi, Redmi and POCO phones: also turn on **USB debugging (Security settings)**, or
+     taps will not work.
+3. Plug the phone in and tap **Allow** on the "Allow USB debugging?" prompt.
+
+### 3. Check that it works
 
 ```bash
-npm install
-npm run build
+npx -y droidreplay doctor
 ```
 
-Check your setup (starts the agent on the device, taps nothing):
+This checks adb, your phone, and the droidreplay agent. It taps nothing. Lines with ✓ are
+fine; a ✗ comes with a hint on how to fix it.
+
+### 4. Add it to your AI app
+
+**Claude Code**
 
 ```bash
-node dist/index.js doctor
+claude mcp add droidreplay -- npx -y droidreplay
 ```
 
-Claude Code:
+**Claude Desktop, Cursor and other MCP apps**: add this to the app's MCP config file
+(Claude Desktop: Settings > Developer > Edit Config; Cursor: `.cursor/mcp.json`):
 
-```bash
-claude mcp add droidreplay -- node /path/to/droidreplay/dist/index.js
+```json
+{
+  "mcpServers": {
+    "droidreplay": {
+      "command": "npx",
+      "args": ["-y", "droidreplay"]
+    }
+  }
+}
 ```
 
-Once published to npm this becomes `npx -y droidreplay` and `npx droidreplay doctor`.
+Restart the app, and you are done.
 
-Env: `ANDROID_SERIAL` picks a device when several are connected; `DROIDREPLAY_EVIDENCE_DIR`
-sets where screenshots go (default `./evidence`); `DROIDREPLAY_FLOWS_DIR` where flows live (default `./flows`).
+### 5. Try it
 
-## Tools
+Ask your assistant things like:
 
-- `observe`: the screen as one line per element, `@ref Class "label" #id [x,y] flags`.
-- `act`: a list of steps run in order in one call (tap, type, scroll until, wait_for,
-  wait_idle, key, launch, screenshot, ...). Stops at the first failure and returns the screen.
-- `screenshot`: saves a JPEG to the evidence folder and returns the path. Only sends the
-  image to the model with `show: true`.
-- `flow`: `record` the steps the AI takes, `save` them as YAML, `run` them again later (each
-  step waits for its element), `patch` a step that broke after a UI change.
+- "What is on my phone screen right now?"
+- "Open Settings and turn on dark mode."
+- "Open the Clock app and set a timer for 5 minutes."
+- "Log in to my app with test@example.com, then save the steps as a flow called login."
 
-## Replay without a model
+Nothing is installed on the phone. A small agent (17 KB) is copied to `/data/local/tmp` and
+runs only while your AI app is using droidreplay.
+
+## Replay without the AI
+
+Ask the assistant to record a task ("start recording a flow called login"), let it do the
+task, then ask it to save the flow. You get a file like `flows/login.yaml`:
 
 ```yaml
-# flows/login.yaml
 name: login
-dismiss: [Nanti saja]          # tapped away whenever it shows up (ads, prompts)
+dismiss: [Not now]             # tapped away whenever it shows up (ads, prompts)
 steps:
   - launch: com.example.app
-  - tap: Masuk
+  - tap: Sign in
   - type: {field: Email, value: "${email}"}
-  - wait_for: Beranda
+  - wait_for: Home
   - screenshot: login-ok
 ```
 
-```bash
-droidreplay run login --var email=qa@example.com   # exit code 0 = passed
-```
-
-Screenshots land in `evidence/<flow>/<timestamp>/`. Works in CI with a device or emulator.
-
-Flows convert to and from [Maestro](https://maestro.mobile.dev) YAML. Steps with no
-counterpart (a `dismiss` list, `sleep`, Maestro's relative selectors, `runFlow`) are listed on
-stderr instead of being dropped silently.
+You can also write or edit these files by hand. Run one from the terminal:
 
 ```bash
-droidreplay export login > login.maestro.yaml      # then: maestro test login.maestro.yaml -e email=...
-droidreplay import checkout.maestro.yaml --name checkout   # saves flows/checkout.yaml
+npx droidreplay run login --var email=test@example.com
 ```
 
-## Notes
+Each step waits for its button or text to appear, so there are no fixed sleeps. The command
+exits with 0 when every step passed and 1 when one failed, so it works in CI too.
+Screenshots are saved in `evidence/<flow>/<time>/`.
 
-- Only one UiAutomation client can run at a time. Stop Appium, Maestro, uiautomator2 or
-  mobilecli before using droidreplay.
+If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
+failed and the screen at that moment, and can fix that step for you.
 
-See `spike/RESULTS.md` for measurements, `docs/architecture.md` for how it works, and
-`docs/roadmap.md` for what is next.
+### Maestro
+
+Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:
+
+```bash
+npx droidreplay export login > login.maestro.yaml
+npx droidreplay import checkout.maestro.yaml --name checkout   # saves flows/checkout.yaml
+```
+
+Steps that have no equivalent on the other side are listed, never dropped silently.
+
+## Tools
+
+What your AI app gets:
+
+| Tool | What it does |
+|---|---|
+| `observe` | Reads the screen as text, one line per button, text or field. |
+| `act` | Runs a list of steps in one go: tap, type, scroll, wait, press a key, open an app, take a screenshot. Stops at the first step that fails and shows the screen. |
+| `screenshot` | Saves a picture of the screen. The AI only looks at it when it asks to. |
+| `flow` | Records steps, saves them as a flow, runs a saved flow, and fixes a broken step. |
+
+## How fast
+
+Reading the screen is **~60x faster** than `uiautomator dump` and mobilecli, screenshots are
+**~7x faster**, and the model reads **~10x less** per screen and per request.
+
+Measured on one phone (Android 14, HyperOS). droidreplay times are end to end from an MCP
+client on the laptop. Method and raw numbers: [`spike/RESULTS.md`](spike/RESULTS.md).
+
+**Speed** (lower is better)
+
+| | droidreplay | mobilecli 1.0.21 | plain adb |
+|---|---|---|---|
+| Read the screen | **36-60 ms** | 2.2-3.3 s | 2.9-3.6 s |
+| First read (starts the agent) | **1-4 s** | 11 s | 2.9-3.6 s |
+| Tap x,y | **77-94 ms** | 115-309 ms | 184 ms |
+| Screenshot to file | **160-170 ms** | 0.8-1.2 s | 1.1-1.4 s |
+
+**What the model reads**
+
+| | droidreplay | mobilecli 1.0.21 | plain adb |
+|---|---|---|---|
+| One screen as text | **1-2 KB** | 15-120 KB JSON | 54 KB XML |
+| Tool definitions, every request | **~800 tokens** (4 tools) | ~7k tokens (34 tools) | n/a |
+
+mobilecli is the device layer of [mobile-mcp](https://github.com/mobile-next/mobile-mcp). Plain
+adb means `uiautomator dump`, `input tap` and `screencap`.
+
+## Troubleshooting
+
+Run `npx -y droidreplay doctor` first; it names most problems.
+
+- **No device found, or the device is "unauthorized"**: unplug and replug the phone, then tap **Allow** on the
+  USB debugging prompt. If no prompt shows, turn USB debugging off and on again.
+- **Taps do nothing on a Xiaomi, Redmi or POCO phone**: turn on **USB debugging (Security
+  settings)** in Developer options, then reboot the phone.
+- **"another tool holds the UiAutomation connection"**: only one automation tool can control the phone at a time.
+  Close Appium, Maestro, uiautomator2 or mobile-mcp first.
+- **Several phones connected**: pick one with `ANDROID_SERIAL=<serial>` (see `adb devices`).
+
+## Configuration
+
+| Variable | What it sets | Default |
+|---|---|---|
+| `ANDROID_SERIAL` | Which phone to use when several are connected | the only one |
+| `DROIDREPLAY_FLOWS_DIR` | Where flows are saved and read | `./flows` |
+| `DROIDREPLAY_EVIDENCE_DIR` | Where screenshots are saved | `./evidence` |
+
+## Contributing
+
+Bug reports from more phones are the most useful thing right now; please include the model
+and Android version. To build from source, see [CONTRIBUTING.md](CONTRIBUTING.md).
+[docs/architecture.md](docs/architecture.md) explains how it works, and
+[docs/roadmap.md](docs/roadmap.md) lists what is next.
+
+## License
+
+[MIT](LICENSE)
