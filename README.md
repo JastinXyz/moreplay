@@ -6,22 +6,31 @@ instead of ~3 s, and a whole batch of steps runs in one request.
 
 ## How fast
 
-Measured on the same phone (Android 14, HyperOS) against plain adb (`uiautomator dump`,
-`input tap`, `screencap`) and [mobilecli](https://github.com/mobile-next/mobilecli) 1.0.21, the
-device layer of mobile-mcp. droidreplay times are end to end from an MCP client on the laptop.
-Raw numbers and method: [`spike/RESULTS.md`](spike/RESULTS.md).
+Reading the screen is **~60x faster** than `uiautomator dump` and mobilecli, screenshots are
+**~7x faster**, and the model reads **~10x less** per screen and per request.
 
-| | plain adb | mobilecli | droidreplay |
+Measured on one phone (Android 14, HyperOS). droidreplay times are end to end from an MCP
+client on the laptop. Method and raw numbers: [`spike/RESULTS.md`](spike/RESULTS.md).
+
+**Speed** (lower is better)
+
+| | droidreplay | mobilecli 1.0.21 | plain adb |
 |---|---|---|---|
-| Read the screen (warm) | 2.9-3.6 s | 2.2-3.3 s | 36-60 ms |
-| Read the screen (first call) | 2.9-3.6 s (nothing to start) | 11 s | 1-4 s (pushes and starts the agent) |
-| Tap x,y | 184 ms | 115-309 ms | 77-94 ms |
-| Screenshot to file | 1.1-1.4 s (PNG, 1.4 MB) | 0.8-1.2 s (PNG) | 160-170 ms (JPEG, full resolution) |
-| Screen as text | 54 KB XML | 15-120 KB JSON | 1-2 KB (one line per element) |
-| Tool definitions sent to the model | n/a | ~7k tokens (34 tools) | ~800 tokens (4 tools) |
+| Read the screen | **36-60 ms** | 2.2-3.3 s | 2.9-3.6 s |
+| First read (starts the agent) | **1-4 s** | 11 s | 2.9-3.6 s |
+| Tap x,y | **77-94 ms** | 115-309 ms | 184 ms |
+| Screenshot to file | **160-170 ms** | 0.8-1.2 s | 1.1-1.4 s |
 
-A batch of steps (`act`) goes to the device in one request, and a saved flow replays with no
-model call between steps.
+**What the model reads**
+
+| | droidreplay | mobilecli 1.0.21 | plain adb |
+|---|---|---|---|
+| One screen as text | **1-2 KB** | 15-120 KB JSON | 54 KB XML |
+| Tool definitions, every request | **~800 tokens** (4 tools) | ~7k tokens (34 tools) | n/a |
+
+mobilecli is the device layer of [mobile-mcp](https://github.com/mobile-next/mobile-mcp). Plain
+adb means `uiautomator dump`, `input tap` and `screencap`. A batch of steps (`act`) goes to the
+device in one request, and a saved flow replays with no model call between steps.
 
 ## Requirements
 
@@ -69,12 +78,12 @@ sets where screenshots go (default `./evidence`); `DROIDREPLAY_FLOWS_DIR` where 
 ```yaml
 # flows/login.yaml
 name: login
-dismiss: [Nanti saja]          # tapped away whenever it shows up (ads, prompts)
+dismiss: [Not now]             # tapped away whenever it shows up (ads, prompts)
 steps:
   - launch: com.example.app
-  - tap: Masuk
+  - tap: Sign in
   - type: {field: Email, value: "${email}"}
-  - wait_for: Beranda
+  - wait_for: Home
   - screenshot: login-ok
 ```
 
