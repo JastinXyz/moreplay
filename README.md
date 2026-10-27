@@ -77,6 +77,16 @@ Ask your assistant things like:
 - "Open the Clock app and set a timer for 5 minutes."
 - "Log in to my app with test@example.com, then save the steps as a flow called login."
 
+**Already have another phone tool, like mobile-mcp?** Name the one you want, so the assistant
+does not pick the other:
+
+- "Use droidreplay to open Settings and turn on dark mode."
+- "With droidreplay, check what is on the screen and save a screenshot to ./shots/home.jpg."
+
+Only one of them can control the phone at a time. If droidreplay says another tool holds the
+connection, turn the other MCP server off in your AI app (in Claude Code: `/mcp`), or ask the
+assistant to stop using it.
+
 Nothing is installed on the phone. A small agent (17 KB) is copied to `/data/local/tmp` and
 runs only while your AI app is using droidreplay.
 
