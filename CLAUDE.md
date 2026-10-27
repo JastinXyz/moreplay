@@ -37,7 +37,8 @@ digging through git history. If a doc says something the code no longer does, fi
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
-  device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions;
+  device; `tools.test.mjs` checks the tool list, a 3200-char budget for tool definitions (JSON), and
+  `flow show`/`patch` on a path;
   `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the
   YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load; `maestro.test.mjs`
   covers both directions, a round trip, and the export/import CLIs.
@@ -46,8 +47,8 @@ digging through git history. If a doc says something the code no longer does, fi
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
   `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;
-  `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session with flows and
-  evidence under `spike/` (both gitignored).
+  `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session (cwd `spike/`, so flows and
+  evidence land in `spike/.droidreplay/`; gitignored, as is `spike/evidence/` for e2e images).
 - `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands

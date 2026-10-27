@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAct, fmt, withActWaits } from "../dist/act.js";
+import { runAct, fmt, screenshotPath, withActWaits } from "../dist/act.js";
 
 /** Fake device: records every call, answers agent steps with ok unless the op is in `fail`. */
 function fakeDevice({ fail = [], shell = {} } = {}) {
@@ -84,10 +84,24 @@ test("screenshot step saves an evidence file with a safe name", async () => {
   const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
   try {
     const d = fakeDevice();
-    const out = await runAct(d, [{ op: "screenshot", name: "TC 03/login ok" }], { evidenceDir: dir, observeAfter: false });
+    const out = await runAct(d, [{ op: "screenshot", name: "TC 03: login ok" }], { evidenceDir: dir, observeAfter: false });
     const path = join(dir, "TC_03_login_ok.jpg");
     assert.match(out, new RegExp(`saved ${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.equal(await readFile(path, "utf8"), "jpeg");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("screenshot step saves to a path the caller chose", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    const target = join(dir, "scratch", "login");
+    const out = await runAct(fakeDevice(), [{ op: "screenshot", name: target }], { evidenceDir: join(dir, "evidence"), observeAfter: false });
+    assert.match(out, /saved .*scratch\/login\.jpg/);
+    assert.equal(await readFile(`${target}.jpg`, "utf8"), "jpeg");
+    assert.equal(screenshotPath("/ev", join(dir, "a.jpeg")), join(dir, "a.jpeg"));
+    assert.equal(screenshotPath("/ev", ".."), "/ev/...jpg");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

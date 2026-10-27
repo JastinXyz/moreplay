@@ -77,13 +77,23 @@ Ask your assistant things like:
 - "Open the Clock app and set a timer for 5 minutes."
 - "Log in to my app with test@example.com, then save the steps as a flow called login."
 
+**Already have another phone tool, like mobile-mcp?** Name the one you want, so the assistant
+does not pick the other:
+
+- "Use droidreplay to open Settings and turn on dark mode."
+- "With droidreplay, check what is on the screen and save a screenshot to ./shots/home.jpg."
+
+Only one of them can control the phone at a time. If droidreplay says another tool holds the
+connection, turn the other MCP server off in your AI app (in Claude Code: `/mcp`), or ask the
+assistant to stop using it.
+
 Nothing is installed on the phone. A small agent (17 KB) is copied to `/data/local/tmp` and
 runs only while your AI app is using droidreplay.
 
 ## Replay without the AI
 
 Ask the assistant to record a task ("start recording a flow called login"), let it do the
-task, then ask it to save the flow. You get a file like `flows/login.yaml`:
+task, then ask it to save the flow. You get a file like `.droidreplay/flows/login.yaml` (or wherever you ask it to save):
 
 ```yaml
 name: login
@@ -104,7 +114,8 @@ npx droidreplay run login --var email=test@example.com
 
 Each step waits for its button or text to appear, so there are no fixed sleeps. The command
 exits with 0 when every step passed and 1 when one failed, so it works in CI too.
-Screenshots are saved in `evidence/<flow>/<time>/`.
+Screenshots are saved in `.droidreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
+Commit the flows you want to keep, and add `.droidreplay/evidence/` to your `.gitignore`.
 
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.
@@ -115,7 +126,7 @@ Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:
 
 ```bash
 npx droidreplay export login > login.maestro.yaml
-npx droidreplay import checkout.maestro.yaml --name checkout   # saves flows/checkout.yaml
+npx droidreplay import checkout.maestro.yaml --out .droidreplay/flows/checkout.yaml
 ```
 
 Steps that have no equivalent on the other side are listed, never dropped silently.
@@ -169,14 +180,6 @@ Run `npx -y droidreplay doctor` first; it names most problems.
 - **"another tool holds the UiAutomation connection"**: only one automation tool can control the phone at a time.
   Close Appium, Maestro, uiautomator2 or mobile-mcp first.
 - **Several phones connected**: pick one with `ANDROID_SERIAL=<serial>` (see `adb devices`).
-
-## Configuration
-
-| Variable | What it sets | Default |
-|---|---|---|
-| `ANDROID_SERIAL` | Which phone to use when several are connected | the only one |
-| `DROIDREPLAY_FLOWS_DIR` | Where flows are saved and read | `./flows` |
-| `DROIDREPLAY_EVIDENCE_DIR` | Where screenshots are saved | `./evidence` |
 
 ## Contributing
 

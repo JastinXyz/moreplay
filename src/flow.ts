@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parse, stringify } from "yaml";
 import { executeSteps, screen, type ActDevice, type Step } from "./act.js";
 import type { StepResult } from "./device.js";
@@ -41,6 +41,10 @@ const TARGETED = new Set(["tap", "long_press", "type"]);
 const SELECTOR_KEYS = ["ref", "x", "y", "text", "id", "desc", "field"];
 
 export const DEFAULT_WAIT_MS = 5000;
+
+// Defaults, relative to where the server or CLI runs; callers can pass their own paths.
+export const FLOWS_DIR = ".droidreplay/flows";
+export const EVIDENCE_DIR = ".droidreplay/evidence";
 
 export function toCompact(step: Step): Record<string, unknown> {
   const { op, ...params } = step;
@@ -108,15 +112,23 @@ export function safeFlowName(name: string): string {
   return safe;
 }
 
+const isPath = (s: string) => /[/\\]/.test(s) || /\.ya?ml$/.test(s);
+
 /** A name resolves to <dir>/<name>.yaml; anything with a slash or .yaml is taken as a path. */
 export function flowPath(dir: string, nameOrPath: string): string {
-  if (nameOrPath.includes("/") || /\.ya?ml$/.test(nameOrPath)) return nameOrPath;
+  if (isPath(nameOrPath)) return nameOrPath;
   return join(dir, `${safeFlowName(nameOrPath)}.yaml`);
 }
 
-export async function saveFlow(dir: string, flow: FlowFile): Promise<string> {
-  await mkdir(dir, { recursive: true });
-  const path = flowPath(dir, flow.name);
+/** The flow's name for a name or a path (`/x/login.yaml` -> `login`). */
+export function flowName(nameOrPath: string): string {
+  return safeFlowName(isPath(nameOrPath) ? basename(nameOrPath) : nameOrPath);
+}
+
+/** Saves to `target` (a name in `dir`, or a path), the flow's own name by default. */
+export async function saveFlow(dir: string, flow: FlowFile, target = flow.name): Promise<string> {
+  const path = flowPath(dir, target);
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, stringify(flow, { lineWidth: 0 }));
   return path;
 }

@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { RunResult, StepResult } from "./device.js";
 
 /** What `act` needs from a device; `Device` implements it, tests pass a fake. */
@@ -155,11 +155,17 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
   throw new Error(`unknown op ${step.op}`);
 }
 
+/** `name` is a file name in evidenceDir, or a path (absolute, or with a slash) chosen by the caller. */
+export function screenshotPath(evidenceDir: string, name?: string): string {
+  if (name && (isAbsolute(name) || /[/\\]/.test(name))) return /\.jpe?g$/i.test(name) ? resolve(name) : resolve(`${name}.jpg`);
+  const safe = (name ?? new Date().toISOString().replace(/[:.]/g, "-")).replace(/[^\w.-]+/g, "_");
+  return join(evidenceDir, safe.endsWith(".jpg") ? safe : `${safe}.jpg`);
+}
+
 export async function saveScreenshot(device: ActDevice, evidenceDir: string, name?: string): Promise<string> {
   const img = await device.screenshot(0, 85);
-  const safe = (name ?? new Date().toISOString().replace(/[:.]/g, "-")).replace(/[^\w.-]+/g, "_");
-  await mkdir(evidenceDir, { recursive: true });
-  const path = join(evidenceDir, safe.endsWith(".jpg") ? safe : `${safe}.jpg`);
+  const path = screenshotPath(evidenceDir, name);
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, img);
   return path;
 }

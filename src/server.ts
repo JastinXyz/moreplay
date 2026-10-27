@@ -1,18 +1,21 @@
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { runAct, saveScreenshot } from "./act.js";
 import { Device, VERSION } from "./device.js";
-import { listFlows, loadFlow, patchSteps, Recorder, runFlow, safeFlowName, saveFlow } from "./flow.js";
+import { EVIDENCE_DIR, FLOWS_DIR, flowName, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow } from "./flow.js";
 
 /** Runs the MCP server on stdio until the client goes away. */
 export async function startServer(): Promise<void> {
   const device = new Device();
-  const evidenceDir = resolve(process.env.DROIDREPLAY_EVIDENCE_DIR ?? join(process.cwd(), "evidence"));
-  const flowsDir = resolve(process.env.DROIDREPLAY_FLOWS_DIR ?? join(process.cwd(), "flows"));
+  // Defaults only: the model can pass its own paths to screenshot and flow.
+  const evidenceDir = resolve(EVIDENCE_DIR);
+  const flowsDir = resolve(FLOWS_DIR);
   let recorder: Recorder | undefined;
+  // Where `flow save` writes: the name or path given to `flow record`.
+  let recordTarget = "";
 
   const server = new McpServer({ name: "droidreplay", version: VERSION });
 
@@ -41,7 +44,7 @@ export async function startServer(): Promise<void> {
         "Ops: tap, long_press{ms}, type{value, field?=label of field, submit?, append?} (no target = focused field),",
         "scroll{dir:down|up|left|right, until?:{text|id|desc}, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
         "wait_for{target, timeout?=5000}, wait_gone{target, timeout?}, wait_idle{quietMs?=300, timeout?}, sleep{ms},",
-        "launch{package}, stop_app{package}, apps{filter?}, screenshot{name} (saved as evidence file, not shown), observe, windows (debug).",
+        "launch{package}, stop_app{package}, apps{filter?}, screenshot{name} (file name or path; saved, not shown), observe, windows.",
       ].join("\n"),
       inputSchema: {
         steps: z.array(z.object({ op: z.string() }).passthrough()).min(1),
@@ -55,9 +58,9 @@ export async function startServer(): Promise<void> {
   server.registerTool(
     "screenshot",
     {
-      description: "Save a JPEG of the screen to the evidence folder and return its path. Set show=true only to look at it yourself.",
+      description: "Save a JPEG of the screen and return its path. show=true to see it too.",
       inputSchema: {
-        name: z.string().optional().describe("file name, e.g. TC-03-login-ok"),
+        name: z.string().optional().describe("file name (evidence folder) or a path"),
         show: z.boolean().optional(),
         refs: z.array(z.number().int()).optional().describe("instead: small crops of these @refs (e.g. icon), nothing saved"),
       },
@@ -78,9 +81,9 @@ export async function startServer(): Promise<void> {
     "flow",
     {
       description: [
-        "Record once, replay without observing. Flows are YAML files in the flows folder.",
-        "record{name}: start saving every successful act step (refs become stable selectors). save / discard: end it.",
-        "run{name, vars?}: replay; each step waits for its element; screenshot steps go to evidence/<flow>/<time>/.",
+        "Record once, replay without observing. name = flow in the flows folder, or a .yaml path.",
+        "record{name}: keep every successful act step (refs become stable selectors). save / discard: end it.",
+        "run{name, vars?, evidence?=dir}: replay; steps wait for their element; screenshots go to <evidence>/<flow>/<time>/.",
         "On failure returns the step number and the screen: fix with patch{name, index, steps} (steps:[] deletes), run again.",
         "list, show{name}. Flow files may set dismiss:[text|{id}]: popups tapped away whenever they appear.",
       ].join("\n"),
@@ -88,23 +91,25 @@ export async function startServer(): Promise<void> {
         action: z.enum(["record", "save", "discard", "run", "patch", "list", "show"]),
         name: z.string().optional(),
         vars: z.record(z.string(), z.string()).optional(),
+        evidence: z.string().optional(),
         index: z.number().int().optional(),
         steps: z.array(z.record(z.string(), z.unknown())).optional(),
       },
     },
-    async ({ action, name, vars, index, steps }) => {
+    async ({ action, name, vars, evidence, index, steps }) => {
       const need = (v: string | undefined) => {
         if (!v) throw new Error(`${action} needs name`);
-        return safeFlowName(v);
+        return v;
       };
       switch (action) {
         case "record":
-          recorder = new Recorder(need(name));
+          recordTarget = need(name);
+          recorder = new Recorder(flowName(recordTarget));
           return text(`recording ${recorder.name}: act steps that succeed are kept until flow save`);
         case "save": {
           if (!recorder) throw new Error("not recording (flow record first)");
           if (!recorder.steps.length) throw new Error("nothing recorded yet");
-          const path = await saveFlow(flowsDir, recorder.toFile());
+          const path = await saveFlow(flowsDir, recorder.toFile(), recordTarget);
           const n = recorder.steps.length;
           recorder = undefined;
           return text(`saved ${n} steps to ${path}`);
@@ -114,12 +119,13 @@ export async function startServer(): Promise<void> {
           return text("recording discarded");
         case "run": {
           const { flow } = await loadFlow(flowsDir, need(name));
-          return text((await runFlow(device, flow, { vars, evidenceDir, screenOnFailure: true })).text);
+          const out = evidence ? resolve(evidence) : evidenceDir;
+          return text((await runFlow(device, flow, { vars, evidenceDir: out, screenOnFailure: true })).text);
         }
         case "patch": {
           if (index === undefined || !steps) throw new Error("patch needs index and steps");
-          const { flow } = await loadFlow(flowsDir, need(name));
-          const path = await saveFlow(flowsDir, patchSteps(flow, index, steps));
+          const { path: src, flow } = await loadFlow(flowsDir, need(name));
+          const path = await saveFlow(flowsDir, patchSteps(flow, index, steps), src);
           return text(`patched step ${index} of ${flow.name} (${path})`);
         }
         case "list": {

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAct } from "../dist/act.js";
 import {
-  fromCompact, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
+  flowName, fromCompact, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
 } from "../dist/flow.js";
 
 /** Fake device that answers each step from `answer(step)`; records the batches it got. */
@@ -127,6 +127,22 @@ test("flows save to and load from YAML files", async () => {
     assert.deepEqual((await loadFlow(dir, "login-ok")).flow, { name: "login ok", steps: [{ tap: "Masuk" }] });
     assert.deepEqual(await listFlows(dir), ["login-ok"]);
     await assert.rejects(loadFlow(dir, "nope"), /flow not found/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("flows save to and load from a path outside the flows folder", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    const target = join(dir, "scratch", "login.yaml");
+    const path = await saveFlow(join(dir, "flows"), { name: "login", steps: [{ tap: "Masuk" }] }, target);
+    assert.equal(path, target);
+    assert.deepEqual((await loadFlow(join(dir, "flows"), target)).flow.steps, [{ tap: "Masuk" }]);
+    assert.equal(flowName(target), "login");
+    assert.equal(flowName("login ok"), "login-ok");
+    // A plain name never leaves the flows folder.
+    assert.equal(await saveFlow(join(dir, "flows"), { name: "..", steps: [] }), join(dir, "flows", "-.yaml"));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
