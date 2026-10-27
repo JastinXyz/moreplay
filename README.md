@@ -4,6 +4,8 @@
 [![CI](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml/badge.svg)](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![Claude Code using droidreplay to work out 7 × 6 on a phone's calculator and save the steps as a flow](docs/demo.gif)
+
 Let an AI assistant use your Android phone. It can read the screen, tap, type and scroll, and
 once it has done a task, you can save the steps and replay them later without the AI.
 
@@ -107,6 +109,9 @@ steps:
 ```
 
 You can also write or edit these files by hand. Run one from the terminal:
+
+![The saved calculator flow replayed from the terminal with no AI, each step printed as it finishes](docs/replay.gif)
+
 
 ```bash
 npx droidreplay run login --var email=test@example.com

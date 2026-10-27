@@ -44,5 +44,5 @@ Status as of the latest merged PR. Move items to Done when they land.
 ## Launch
 
 - [x] README benchmark table (from `spike/RESULTS.md`)
-- [ ] README demo GIF
+- [x] README demo GIFs (Claude Code driving the phone, and a no-AI replay)
 - [ ] Make the GitHub repo public, publish to npm, post to communities
