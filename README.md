@@ -93,7 +93,7 @@ runs only while your AI app is using droidreplay.
 ## Replay without the AI
 
 Ask the assistant to record a task ("start recording a flow called login"), let it do the
-task, then ask it to save the flow. You get a file like `flows/login.yaml`:
+task, then ask it to save the flow. You get a file like `.droidreplay/flows/login.yaml` (or wherever you ask it to save):
 
 ```yaml
 name: login
@@ -114,7 +114,8 @@ npx droidreplay run login --var email=test@example.com
 
 Each step waits for its button or text to appear, so there are no fixed sleeps. The command
 exits with 0 when every step passed and 1 when one failed, so it works in CI too.
-Screenshots are saved in `evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
+Screenshots are saved in `.droidreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
+Commit the flows you want to keep, and add `.droidreplay/evidence/` to your `.gitignore`.
 
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.
@@ -125,7 +126,7 @@ Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:
 
 ```bash
 npx droidreplay export login > login.maestro.yaml
-npx droidreplay import checkout.maestro.yaml --out flows/checkout.yaml
+npx droidreplay import checkout.maestro.yaml --out .droidreplay/flows/checkout.yaml
 ```
 
 Steps that have no equivalent on the other side are listed, never dropped silently.

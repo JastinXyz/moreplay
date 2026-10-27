@@ -5,14 +5,14 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { runAct, saveScreenshot } from "./act.js";
 import { Device, VERSION } from "./device.js";
-import { flowName, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow } from "./flow.js";
+import { EVIDENCE_DIR, FLOWS_DIR, flowName, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow } from "./flow.js";
 
 /** Runs the MCP server on stdio until the client goes away. */
 export async function startServer(): Promise<void> {
   const device = new Device();
   // Defaults only: the model can pass its own paths to screenshot and flow.
-  const evidenceDir = resolve("evidence");
-  const flowsDir = resolve("flows");
+  const evidenceDir = resolve(EVIDENCE_DIR);
+  const flowsDir = resolve(FLOWS_DIR);
   let recorder: Recorder | undefined;
   // Where `flow save` writes: the name or path given to `flow record`.
   let recordTarget = "";

@@ -7,12 +7,12 @@ Usage:
   droidreplay            run the MCP server on stdio (what MCP clients start)
   droidreplay doctor     check adb, the device and the agent, then exit
   droidreplay run <flow> [--var key=value]... [--evidence dir]
-                         replay a flow (name in ./flows or a .yaml path) without a model;
+                         replay a flow (name in .droidreplay/flows or a .yaml path) without a model;
                          exit code 0 when it passes, 1 when a step fails
   droidreplay export <flow> [--app-id package] [--out file]
                          print a flow as Maestro YAML (steps with no counterpart go to stderr)
   droidreplay import <maestro.yaml> [--name flow-name] [--out file.yaml]
-                         save a Maestro flow (default ./flows/<name>.yaml)
+                         save a Maestro flow (default .droidreplay/flows/<name>.yaml)
   droidreplay --version
 
 Env:

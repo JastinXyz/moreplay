@@ -1,6 +1,6 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
-import { flowPath, loadFlow, safeFlowName, saveFlow } from "./flow.js";
+import { FLOWS_DIR, flowPath, loadFlow, safeFlowName, saveFlow } from "./flow.js";
 import { fromMaestro, toMaestro } from "./maestro.js";
 
 /** Splits `--key value` options from positional args; returns null on a flag with no value. */
@@ -20,7 +20,7 @@ function parseArgs(args: string[], known: string[]): { pos: string[]; opts: Reco
   return { pos, opts };
 }
 
-const flowsDir = () => resolve("flows");
+const flowsDir = () => resolve(FLOWS_DIR);
 
 function report(skipped: string[]): void {
   if (skipped.length) console.error(`skipped (no counterpart):\n${skipped.map((s) => `  ${s}`).join("\n")}`);

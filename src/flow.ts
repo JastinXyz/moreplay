@@ -42,6 +42,10 @@ const SELECTOR_KEYS = ["ref", "x", "y", "text", "id", "desc", "field"];
 
 export const DEFAULT_WAIT_MS = 5000;
 
+// Defaults, relative to where the server or CLI runs; callers can pass their own paths.
+export const FLOWS_DIR = ".droidreplay/flows";
+export const EVIDENCE_DIR = ".droidreplay/evidence";
+
 export function toCompact(step: Step): Record<string, unknown> {
   const { op, ...params } = step;
   const keys = Object.keys(params);

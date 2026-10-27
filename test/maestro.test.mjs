@@ -137,7 +137,7 @@ test("import and export CLIs", async () => {
     const imp = await run("import", src, "--name", "login");
     assert.match(imp.stdout, /saved .*login\.yaml \(2 steps\)/);
     assert.match(imp.stderr, /runFlow/);
-    assert.match(await readFile(join(dir, "flows", "login.yaml"), "utf8"), /tap: Masuk/);
+    assert.match(await readFile(join(dir, ".droidreplay", "flows", "login.yaml"), "utf8"), /tap: Masuk/);
     const out = await run("import", src, "--out", "elsewhere/login.yaml");
     assert.match(out.stdout, /saved .*elsewhere\/login\.yaml/);
     assert.match(await readFile(join(dir, "elsewhere", "login.yaml"), "utf8"), /name: login/);

@@ -47,8 +47,8 @@ digging through git history. If a doc says something the code no longer does, fi
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
   `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;
-  `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session with flows and
-  evidence under `spike/` (both gitignored).
+  `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session (cwd `spike/`, so flows and
+  evidence land in `spike/.droidreplay/`; gitignored, as is `spike/evidence/` for e2e images).
 - `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands
