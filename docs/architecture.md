@@ -134,7 +134,8 @@ hidden screen.
 
 Scroll: picks the biggest scrollable node offering the directional action
 (ACTION_SCROLL_DOWN/UP/LEFT/RIGHT) in the top-most window that has one, else the biggest
-scrollable; performs the action, or swipes inside that node when the action is refused. It
+scrollable; performs the action, or swipes inside that node when the action is refused (the
+finger moves against `dir`: down swipes up, left swipes right). It
 then waits up to 700 ms for the tree to change (actions are async); no change means the end
 of the list.
 
