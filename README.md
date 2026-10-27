@@ -65,6 +65,15 @@ droidreplay run login --var email=qa@example.com   # exit code 0 = passed
 
 Screenshots land in `evidence/<flow>/<timestamp>/`. Works in CI with a device or emulator.
 
+Flows convert to and from [Maestro](https://maestro.mobile.dev) YAML. Steps with no
+counterpart (a `dismiss` list, `sleep`, Maestro's relative selectors, `runFlow`) are listed on
+stderr instead of being dropped silently.
+
+```bash
+droidreplay export login > login.maestro.yaml      # then: maestro test login.maestro.yaml -e email=...
+droidreplay import checkout.maestro.yaml --name checkout   # saves flows/checkout.yaml
+```
+
 ## Notes
 
 - Only one UiAutomation client can run at a time. Stop Appium, Maestro, uiautomator2 or

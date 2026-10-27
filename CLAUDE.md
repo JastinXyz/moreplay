@@ -24,12 +24,14 @@ digging through git history. If a doc says something the code no longer does, fi
   - `build.sh`: javac + d8 against the newest installed Android platform.
 - `src/`: TypeScript MCP server.
   - `device.ts`: adb, device selection, push/start/stop of the agent, HTTP client.
-  - `index.ts`: CLI entry (`droidreplay` = MCP server, `doctor`, `--version`, `--help`).
+  - `index.ts`: CLI entry (`droidreplay` = MCP server, `doctor`, `run`, `export`, `import`, `--version`, `--help`).
   - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`, `flow`), the active
     recorder, and process lifecycle.
   - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
     agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
   - `run-cli.ts`: `droidreplay run <flow> [--var k=v]` (replay with no model, exit 0/1).
+  - `maestro.ts`: flow <-> Maestro YAML (`toMaestro`, `fromMaestro`); unmapped steps are
+    returned in `skipped`. `maestro-cli.ts`: `droidreplay export` / `import`.
   - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
     start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
@@ -37,7 +39,8 @@ digging through git history. If a doc says something the code no longer does, fi
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
   device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions;
   `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the
-  YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load.
+  YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load; `maestro.test.mjs`
+  covers both directions, a round trip, and the export/import CLIs.
 - `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.

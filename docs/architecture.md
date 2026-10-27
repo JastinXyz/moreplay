@@ -174,3 +174,28 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   launch and shows "Lanjut ke aplikasi" only after a countdown.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).
+
+## Maestro export/import (src/maestro.ts)
+
+`droidreplay export <flow> [--app-id pkg] [--out file]` and `droidreplay import <file>
+[--name n]`. CLI only, so the MCP tool budget stays the same. Steps with no counterpart are
+left out and listed on stderr (`skipped`), never dropped silently. `${var}` passes through both
+ways (Maestro reads it from `-e var=...`).
+
+| droidreplay | Maestro |
+|---|---|
+| launch / stop_app | `launchApp` / `stopApp` (bare when the package is the header's `appId`, which defaults to the first launched package) |
+| tap / long_press `text`, `desc`, `id`, `x,y` | `tapOn` / `longPressOn` with `text` (Maestro's text also matches content-desc), `id`, `point: "x,y"`; `optional` kept |
+| type `{field, value}` | `tapOn: field`, `eraseText` (unless `append`), `inputText`, `pressKey: Enter` for `submit`. Import folds `eraseText` + `inputText` back into one replacing type |
+| key back / home / enter / delete / tab | `back`, `pressKey: Home/Enter/Backspace/Tab` |
+| scroll `dir` | `scroll` for down; `swipe: {direction}` names the finger's direction, so up -> DOWN, right -> LEFT |
+| scroll `until` | `scrollUntilVisible: {element, direction}` |
+| swipe x1..y2 | `swipe: {start, end, duration}` (absolute points only on import) |
+| wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
+| wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
+
+Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
+selectors (`below`, `index`, ...), percent points, `launchApp` options like `clearState`,
+`runFlow`, `repeat`, scripts, `hideKeyboard` (import). observe/apps/windows export to nothing.
+Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
+characters may match differently after a conversion.
