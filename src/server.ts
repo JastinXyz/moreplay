@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -10,8 +10,9 @@ import { flowName, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow 
 /** Runs the MCP server on stdio until the client goes away. */
 export async function startServer(): Promise<void> {
   const device = new Device();
-  const evidenceDir = resolve(process.env.DROIDREPLAY_EVIDENCE_DIR ?? join(process.cwd(), "evidence"));
-  const flowsDir = resolve(process.env.DROIDREPLAY_FLOWS_DIR ?? join(process.cwd(), "flows"));
+  // Defaults only: the model can pass its own paths to screenshot and flow.
+  const evidenceDir = resolve("evidence");
+  const flowsDir = resolve("flows");
   let recorder: Recorder | undefined;
   // Where `flow save` writes: the name or path given to `flow record`.
   let recordTarget = "";

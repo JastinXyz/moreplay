@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 // Listing tools never touches a device, so this runs in CI.
 test("exposes 4 tools and keeps their definitions small", async () => {
@@ -27,7 +27,7 @@ test("exposes 4 tools and keeps their definitions small", async () => {
 test("flow show and patch take a .yaml path outside the flows folder", async () => {
   const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
   const client = new Client({ name: "test", version: "0" });
-  await client.connect(new StdioClientTransport({ command: "node", args: ["dist/index.js"], env: { ...process.env, DROIDREPLAY_FLOWS_DIR: join(dir, "flows") } }));
+  await client.connect(new StdioClientTransport({ command: "node", args: [resolve("dist/index.js")], cwd: dir }));
   try {
     const path = join(dir, "scratch", "login.yaml");
     await mkdir(join(dir, "scratch"));

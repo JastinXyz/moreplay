@@ -1,11 +1,12 @@
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { Device } from "./device.js";
 import { loadFlow, runFlow } from "./flow.js";
 
-/** `droidreplay run <flow> [--var k=v]...`: replays a flow with no model involved. */
+/** `droidreplay run <flow> [--var k=v]... [--evidence dir]`: replays a flow with no model involved. */
 export async function runCli(args: string[]): Promise<number> {
   const vars: Record<string, string> = {};
   let target: string | undefined;
+  let evidenceDir = resolve("evidence");
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--var") {
@@ -16,6 +17,13 @@ export async function runCli(args: string[]): Promise<number> {
         return 2;
       }
       vars[kv.slice(0, eq)] = kv.slice(eq + 1);
+    } else if (a === "--evidence") {
+      const dir = args[++i];
+      if (!dir) {
+        console.error("--evidence needs a folder");
+        return 2;
+      }
+      evidenceDir = resolve(dir);
     } else if (!target) {
       target = a;
     } else {
@@ -24,15 +32,13 @@ export async function runCli(args: string[]): Promise<number> {
     }
   }
   if (!target) {
-    console.error("usage: droidreplay run <flow name or .yaml path> [--var key=value]...");
+    console.error("usage: droidreplay run <flow name or .yaml path> [--var key=value]... [--evidence dir]");
     return 2;
   }
 
-  const flowsDir = resolve(process.env.DROIDREPLAY_FLOWS_DIR ?? join(process.cwd(), "flows"));
-  const evidenceDir = resolve(process.env.DROIDREPLAY_EVIDENCE_DIR ?? join(process.cwd(), "evidence"));
   const device = new Device();
   try {
-    const { flow } = await loadFlow(flowsDir, target);
+    const { flow } = await loadFlow(resolve("flows"), target);
     const result = await runFlow(device, flow, { vars, evidenceDir });
     console.log(result.text);
     return result.ok ? 0 : 1;

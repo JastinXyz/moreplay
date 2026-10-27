@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const client = new Client({ name: "test", version: "0" });
-await client.connect(new StdioClientTransport({ command: "node", args: ["dist/index.js"], env: { ...process.env, DROIDREPLAY_EVIDENCE_DIR: "spike/evidence" } }));
+await client.connect(new StdioClientTransport({ command: "node", args: ["../dist/index.js"], cwd: "spike", env: process.env }));
 const tools = await client.listTools();
 const defs = JSON.stringify(tools.tools);
 console.log(`tools: ${tools.tools.map((t) => t.name).join(", ")} | defs ${defs.length} chars ≈ ${Math.round(defs.length / 4)} tokens`);

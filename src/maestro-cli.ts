@@ -1,5 +1,5 @@
 import { access, readFile, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { flowPath, loadFlow, safeFlowName, saveFlow } from "./flow.js";
 import { fromMaestro, toMaestro } from "./maestro.js";
 
@@ -20,7 +20,7 @@ function parseArgs(args: string[], known: string[]): { pos: string[]; opts: Reco
   return { pos, opts };
 }
 
-const flowsDir = () => resolve(process.env.DROIDREPLAY_FLOWS_DIR ?? join(process.cwd(), "flows"));
+const flowsDir = () => resolve("flows");
 
 function report(skipped: string[]): void {
   if (skipped.length) console.error(`skipped (no counterpart):\n${skipped.map((s) => `  ${s}`).join("\n")}`);
@@ -50,25 +50,25 @@ export async function exportCli(args: string[]): Promise<number> {
   }
 }
 
-/** `droidreplay import <maestro.yaml> [--name n]`: saves a Maestro file as a flow. */
+/** `droidreplay import <maestro.yaml> [--name n] [--out path]`: saves a Maestro file as a flow. */
 export async function importCli(args: string[]): Promise<number> {
-  const p = parseArgs(args, ["--name"]);
+  const p = parseArgs(args, ["--name", "--out"]);
   if (!p || p.pos.length !== 1) {
-    console.error("usage: droidreplay import <maestro .yaml> [--name flow-name]");
+    console.error("usage: droidreplay import <maestro .yaml> [--name flow-name] [--out file.yaml]");
     return 2;
   }
   try {
     const src = p.pos[0];
     const { out: flow, skipped } = fromMaestro(await readFile(src, "utf8"), p.opts["--name"]);
-    // A Maestro header rarely has a name; fall back to the file's.
-    if (!p.opts["--name"] && flow.name === "maestro") flow.name = basename(src).replace(/\.ya?ml$/, "");
+    // A Maestro header rarely has a name; fall back to the output file's, else the source's.
+    if (!p.opts["--name"] && flow.name === "maestro") flow.name = basename(p.opts["--out"] ?? src).replace(/\.ya?ml$/, "");
     flow.name = safeFlowName(flow.name);
-    const dest = flowPath(flowsDir(), flow.name);
+    const dest = resolve(p.opts["--out"] ?? flowPath(flowsDir(), flow.name));
     if (await access(dest).then(() => true, () => false)) {
-      console.error(`${dest} exists; pick another --name`);
+      console.error(`${dest} exists; pick another --name or --out`);
       return 1;
     }
-    console.log(`saved ${await saveFlow(flowsDir(), flow)} (${flow.steps.length} steps)`);
+    console.log(`saved ${await saveFlow(flowsDir(), flow, dest)} (${flow.steps.length} steps)`);
     report(skipped);
     return 0;
   } catch (e) {

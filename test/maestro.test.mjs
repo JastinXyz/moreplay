@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { parseAllDocuments } from "yaml";
 import { fromMaestro, toMaestro } from "../dist/maestro.js";
@@ -130,14 +130,17 @@ test("export then import keeps the flow", () => {
 
 test("import and export CLIs", async () => {
   const dir = await mkdtemp(join(tmpdir(), "dr-maestro-"));
-  const run = (...args) => promisify(execFile)("node", ["dist/index.js", ...args], { env: { ...process.env, DROIDREPLAY_FLOWS_DIR: dir } });
+  const run = (...args) => promisify(execFile)("node", [resolve("dist/index.js"), ...args], { cwd: dir });
   try {
     const src = join(dir, "maestro-login.yaml");
     await writeFile(src, "appId: com.app\n---\n- launchApp\n- tapOn: Masuk\n- runFlow: x.yaml\n");
     const imp = await run("import", src, "--name", "login");
     assert.match(imp.stdout, /saved .*login\.yaml \(2 steps\)/);
     assert.match(imp.stderr, /runFlow/);
-    assert.match(await readFile(join(dir, "login.yaml"), "utf8"), /tap: Masuk/);
+    assert.match(await readFile(join(dir, "flows", "login.yaml"), "utf8"), /tap: Masuk/);
+    const out = await run("import", src, "--out", "elsewhere/login.yaml");
+    assert.match(out.stdout, /saved .*elsewhere\/login\.yaml/);
+    assert.match(await readFile(join(dir, "elsewhere", "login.yaml"), "utf8"), /name: login/);
     await assert.rejects(run("import", src, "--name", "login"), (e) => e.code === 1 && /exists/.test(e.stderr));
     const exp = await run("export", "login");
     assert.match(exp.stdout, /appId: com.app\n.*---\n- launchApp\n- tapOn: Masuk/s);

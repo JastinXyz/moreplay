@@ -64,7 +64,7 @@ text/id/desc target until it appears; replays set it on every targeted step.
 | windows | | agent (debug: every window the system reports, with type/layer/title) |
 | launch / stop_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity`, `am start`) |
 | apps | `filter` | server (`pm list packages -3`) |
-| screenshot | `name`: a file name (saved in `DROIDREPLAY_EVIDENCE_DIR`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |
+| screenshot | `name`: a file name (saved in `./evidence`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |
 
 The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server ops, executes them in order,
 stops at the first failure, then (unless `observe_after: false`) waits for idle and appends the
@@ -141,11 +141,13 @@ of the list.
 
 ## Flows (src/flow.ts)
 
-A flow is a YAML file in `DROIDREPLAY_FLOWS_DIR` (default `./flows`), or anywhere else: every
-`flow` action and `droidreplay run` take a name (looked up in that folder, made safe so it
-cannot leave it) or a path (has a slash or ends in `.yaml`, used as given). `record{name}` with a
-path saves there; `patch` writes back to the file it loaded. `run{evidence}` overrides the
-evidence folder for that run, so a model can keep files in its own scratch space:
+A flow is a YAML file in `./flows` (relative to where the server or CLI runs), or anywhere
+else; there is no config for these folders. Every `flow` action and `droidreplay run` take a
+name (looked up in that folder, made safe so it cannot leave it) or a path (has a slash or ends
+in `.yaml`, used as given). `record{name}` with a path saves there; `patch` writes back to the
+file it loaded. `run{evidence}` (CLI: `--evidence`) sets the evidence folder for that run, and
+`droidreplay import --out` picks the output file, so a model can keep files in its own scratch
+space:
 
 ```yaml
 name: my-device

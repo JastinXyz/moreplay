@@ -114,7 +114,7 @@ npx droidreplay run login --var email=test@example.com
 
 Each step waits for its button or text to appear, so there are no fixed sleeps. The command
 exits with 0 when every step passed and 1 when one failed, so it works in CI too.
-Screenshots are saved in `evidence/<flow>/<time>/`.
+Screenshots are saved in `evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
 
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.
@@ -125,7 +125,7 @@ Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:
 
 ```bash
 npx droidreplay export login > login.maestro.yaml
-npx droidreplay import checkout.maestro.yaml --name checkout   # saves flows/checkout.yaml
+npx droidreplay import checkout.maestro.yaml --out flows/checkout.yaml
 ```
 
 Steps that have no equivalent on the other side are listed, never dropped silently.
@@ -179,20 +179,6 @@ Run `npx -y droidreplay doctor` first; it names most problems.
 - **"another tool holds the UiAutomation connection"**: only one automation tool can control the phone at a time.
   Close Appium, Maestro, uiautomator2 or mobile-mcp first.
 - **Several phones connected**: pick one with `ANDROID_SERIAL=<serial>` (see `adb devices`).
-
-## Configuration
-
-You usually need none of this: the AI can pass its own paths (a screenshot `name` or a flow
-`name` can be a full path, and `flow run` takes an `evidence` folder). These only set the
-defaults. Put them in the `env` block of the MCP config above, or with
-`claude mcp add droidreplay -e ANDROID_SERIAL=... -- npx -y droidreplay`. For the CLI, put them
-before the command: `ANDROID_SERIAL=... npx droidreplay run login`.
-
-| Variable | What it sets | Default |
-|---|---|---|
-| `ANDROID_SERIAL` | Which phone to use when several are connected | the only one |
-| `DROIDREPLAY_FLOWS_DIR` | Where flows are saved and read | `./flows` |
-| `DROIDREPLAY_EVIDENCE_DIR` | Where screenshots are saved | `./evidence` |
 
 ## Contributing
 
