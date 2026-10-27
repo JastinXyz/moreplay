@@ -9,6 +9,10 @@ Usage:
   droidreplay run <flow> [--var key=value]...
                          replay a flow (name in ./flows or a .yaml path) without a model;
                          exit code 0 when it passes, 1 when a step fails
+  droidreplay export <flow> [--app-id package] [--out file]
+                         print a flow as Maestro YAML (steps with no counterpart go to stderr)
+  droidreplay import <maestro.yaml> [--name flow-name]
+                         save a Maestro flow into ./flows
   droidreplay --version
 
 Env:
@@ -27,6 +31,9 @@ if (!cmd) {
 } else if (cmd === "run") {
   const { runCli } = await import("./run-cli.js");
   process.exit(await runCli(process.argv.slice(3)));
+} else if (cmd === "export" || cmd === "import") {
+  const { exportCli, importCli } = await import("./maestro-cli.js");
+  process.exit(await (cmd === "export" ? exportCli : importCli)(process.argv.slice(3)));
 } else if (cmd === "--version" || cmd === "-v") {
   console.log(VERSION);
 } else if (cmd === "--help" || cmd === "-h") {

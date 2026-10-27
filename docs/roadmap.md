@@ -25,7 +25,7 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] Recorder: successful `act` steps recorded with selectors (not coordinates)
 - [x] `replay` of a saved flow without a model (`flow run`, `droidreplay run`), evidence per run
 - [x] Self-heal: on a broken step, return the step + screen so the model can patch the flow
-- [ ] Maestro YAML export/import
+- [x] Maestro YAML export/import (`droidreplay export` / `import`, CLI only)
 
 ## Quality
 
