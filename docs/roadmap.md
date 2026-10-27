@@ -38,6 +38,8 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] WebView: Chromium's accessibility tree covers web content (observe, tap, type, scroll
   tested); CDP only matters for debuggable WebViews with an empty tree, so it waits for a real case
 - [x] Optional steps and a flow-level `dismiss` list (interstitial ads, prompts that appear only sometimes)
+- [x] `act` waits briefly for selector targets after the first step (a tap into a bottom sheet
+  failed in 55 ms while the sheet opened); empty fields print their hint once
 
 ## Launch
 

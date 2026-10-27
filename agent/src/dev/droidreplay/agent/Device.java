@@ -327,12 +327,12 @@ final class Device {
             String firstPart = label.isEmpty() ? null : label.split(" · ")[0];
             refs.put(ref, new Ref(r, shortId, firstPart, !own.isEmpty()));
             sb.append('@').append(ref).append(' ').append(shortClass(n.getClassName()));
-            if (!label.isEmpty()) sb.append(" \"").append(label).append('"');
+            String hint = n.isEditable() && n.getHintText() != null ? n.getHintText().toString() : "";
+            // An empty field reports its hint as its text; print it once, as the hint.
+            if (!label.isEmpty() && !label.equals(hint)) sb.append(" \"").append(label).append('"');
             String id = n.getViewIdResourceName();
             if (id != null) sb.append(" #").append(id.substring(id.indexOf('/') + 1));
-            if (n.isEditable() && n.getHintText() != null && n.getHintText().length() > 0) {
-                sb.append(" hint=\"").append(n.getHintText()).append('"');
-            }
+            if (!hint.isEmpty()) sb.append(" hint=\"").append(hint).append('"');
             sb.append(" [").append(r.centerX()).append(',').append(r.centerY()).append(']');
             if (n.isClickable()) sb.append(" tap");
             if (n.isEditable()) sb.append(" edit");

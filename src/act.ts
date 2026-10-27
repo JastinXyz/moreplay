@@ -17,6 +17,18 @@ export const HOST_OPS = new Set(["launch", "stop_app", "apps", "screenshot"]);
 // How long the tree must stay unchanged before a screenshot step captures it.
 const SETTLE_MS = 400;
 
+const TARGETED = new Set(["tap", "long_press", "type"]);
+// A step that opens a sheet or a screen returns before its content is in the tree, so the
+// next tap in the same batch would miss it.
+const ACT_WAIT_MS = 3000;
+
+/** Lets every selector-targeted step after the first wait briefly for its element. */
+export function withActWaits(steps: Step[]): Step[] {
+  return steps.map((s, i) =>
+    i > 0 && TARGETED.has(s.op) && !("wait" in s) && ["text", "id", "desc", "field"].some((k) => k in s) ? { ...s, wait: ACT_WAIT_MS } : s,
+  );
+}
+
 export interface ActOptions {
   observeAfter?: boolean;
   evidenceDir: string;
@@ -87,8 +99,9 @@ export async function executeSteps(device: ActDevice, steps: Step[], evidenceDir
 
 /** The `act` tool: executeSteps, then the screen afterwards unless told not to. */
 export async function runAct(device: ActDevice, steps: Step[], opts: ActOptions): Promise<string> {
-  const { lines, outcomes } = await executeSteps(device, steps, opts.evidenceDir);
-  if (opts.onSuccess) for (const o of outcomes) if (o.result.ok) opts.onSuccess(o.step, o.result);
+  const { lines, outcomes } = await executeSteps(device, withActWaits(steps), opts.evidenceDir);
+  // Record the steps as given: the implicit wait is not part of the flow.
+  if (opts.onSuccess) outcomes.forEach((o, i) => o.result.ok && opts.onSuccess!(steps[i], o.result));
   if (opts.observeAfter !== false && steps[steps.length - 1].op !== "observe") {
     lines.push("--- screen", await screen(device));
   }
