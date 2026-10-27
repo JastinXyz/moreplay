@@ -6,18 +6,19 @@ instead of ~3 s, and a whole batch of steps runs in one request.
 
 ## How fast
 
-Measured against [mobilecli](https://github.com/mobile-next/mobilecli) 1.0.21, the device
-layer of mobile-mcp, on the same phone (Android 14, HyperOS). droidreplay times are end to end
-from an MCP client on the laptop. Raw numbers and method: [`spike/RESULTS.md`](spike/RESULTS.md).
+Measured on the same phone (Android 14, HyperOS) against plain adb (`uiautomator dump`,
+`input tap`, `screencap`) and [mobilecli](https://github.com/mobile-next/mobilecli) 1.0.21, the
+device layer of mobile-mcp. droidreplay times are end to end from an MCP client on the laptop.
+Raw numbers and method: [`spike/RESULTS.md`](spike/RESULTS.md).
 
-| | mobilecli | droidreplay |
-|---|---|---|
-| Read the screen (warm) | 2.2-3.3 s | 21-55 ms |
-| Read the screen (first call) | 11 s | 1-4 s (pushes and starts the agent) |
-| Tap x,y | 115-309 ms | 77-94 ms |
-| Screenshot to file | 0.8-1.2 s (PNG) | 61-99 ms (JPEG, full resolution) |
-| Screen as text | 15-120 KB | ~2 KB (one line per element) |
-| Tool definitions sent to the model | ~7k tokens (34 tools) | ~800 tokens (4 tools) |
+| | plain adb | mobilecli | droidreplay |
+|---|---|---|---|
+| Read the screen (warm) | 2.9-3.6 s | 2.2-3.3 s | 36-60 ms |
+| Read the screen (first call) | same | 11 s | 1-4 s (pushes and starts the agent) |
+| Tap x,y | 184 ms | 115-309 ms | 77-94 ms |
+| Screenshot to file | 1.1-1.4 s (PNG, 1.4 MB) | 0.8-1.2 s (PNG) | 160-170 ms (JPEG, full resolution) |
+| Screen as text (home screen) | 54 KB XML | 15-120 KB | ~1 KB (one line per element) |
+| Tool definitions sent to the model | n/a | ~7k tokens (34 tools) | ~800 tokens (4 tools) |
 
 A batch of steps (`act`) goes to the device in one request, and a saved flow replays with no
 model call between steps.

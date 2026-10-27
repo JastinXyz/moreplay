@@ -49,3 +49,18 @@ Findings:
   to fix the step.
 - `pkill -f <class>` from `adb shell` kills its own shell; use the `[x]` pattern trick.
 - Benchmark lesson: never tap near the status bar. A tap at 540,60 pulled down the shade.
+
+# Re-run for the README (2026-10-27)
+
+Same device, agent at 0.1.0 after the covered-screen, icon and scroll changes. Read-only:
+`node spike/bench.mjs` on the home screen, and `adb exec-out screencap -p > file` five times.
+
+| Operation | Result |
+|---|---|
+| `observe` warm (MCP client, end to end) | 36-60 ms, 948 B |
+| `observe` cold (starts the agent) | 1.6 s |
+| `screenshot` tool to file | 158-171 ms (first call 508 ms) |
+| plain adb `screencap -p` to file | 1.1-1.4 s, 1.4 MB PNG at 1080x2400 |
+
+Observe is a little slower than Spike 2's 21-55 ms (on the calculator) and screenshots
+slower than its 61-99 ms; the README uses these newer numbers. Taps were not re-measured.
