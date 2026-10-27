@@ -13,12 +13,13 @@ function fakeDevice(answer = () => ({ ok: true, out: "done" })) {
   const batches = [];
   return {
     batches,
-    async run(steps) {
+    async run(steps, _stop, onResult) {
       batches.push(steps);
       const results = [];
       for (const s of steps) {
         const r = { op: s.op, ms: 1, ...(s.op === "observe" ? { ok: true, out: "app=x\n" } : answer(s)) };
         results.push(r);
+        onResult?.(r);
         if (!r.ok) return { ok: false, ms: 1, results };
       }
       return { ok: true, ms: 1, results };
@@ -170,4 +171,22 @@ test("a flow's dismiss list goes to every step that waits for an element", async
   assert.deepEqual(sent.find((s) => s.op === "tap").dismiss, list);
   assert.deepEqual(sent.find((s) => s.op === "wait_for").dismiss, list);
   assert.equal(sent.find((s) => s.op === "key").dismiss, undefined);
+});
+
+test("runFlow hands each step result over as it finishes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    const seen = [];
+    const flow = { name: "live", steps: [{ launch: "com.app" }, { tap: "A" }, { tap: "B" }, { screenshot: "end" }] };
+    const run = await runFlow(fakeDevice(), flow, { evidenceDir: dir, onStep: (i, r) => seen.push(`${i}:${r.op}:${r.ok}`) });
+    assert.deepEqual(seen, ["0:launch:true", "1:tap:true", "2:tap:true", "3:screenshot:true"]);
+    assert.ok(run.ok && run.shots && /^\d+\.\d$/.test(run.secs));
+
+    seen.length = 0;
+    const failed = await runFlow(fakeDevice((s) => (s.text === "B" ? { ok: false, error: "not found" } : { ok: true, out: "done" })), flow, { evidenceDir: dir, onStep: (i, r) => seen.push(`${i}:${r.ok}`) });
+    assert.deepEqual(seen, ["0:true", "1:true", "2:false"]);
+    assert.equal(failed.failedStep, 3);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

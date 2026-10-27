@@ -29,7 +29,10 @@ digging through git history. If a doc says something the code no longer does, fi
     recorder, and process lifecycle.
   - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
     agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
-  - `run-cli.ts`: `droidreplay run <flow> [--var k=v]` (replay with no model, exit 0/1).
+  - `run-cli.ts`: `droidreplay run <flow> [--var k=v] [--evidence dir]` (replay with no model,
+    exit 0/1). Prints each step live via the agent's streamed `/run`.
+  - `report.ts`: test-runner style output for `run` (aligned ✓/✗ lines, PASS/FAIL badge;
+    colors only on a TTY without `NO_COLOR`). Labels come from the flow, so `${vars}` stay hidden.
   - `maestro.ts`: flow <-> Maestro YAML (`toMaestro`, `fromMaestro`); unmapped steps are
     returned in `skipped`. `maestro-cli.ts`: `droidreplay export` / `import`.
   - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
@@ -41,7 +44,8 @@ digging through git history. If a doc says something the code no longer does, fi
   `flow show`/`patch` on a path;
   `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the
   YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load; `maestro.test.mjs`
-  covers both directions, a round trip, and the export/import CLIs.
+  covers both directions, a round trip, and the export/import CLIs; `report.test.mjs` covers
+  step labels and plain/colored output.
 - `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.

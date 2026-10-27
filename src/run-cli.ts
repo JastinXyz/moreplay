@@ -1,6 +1,7 @@
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { Device } from "./device.js";
-import { EVIDENCE_DIR, FLOWS_DIR, loadFlow, runFlow } from "./flow.js";
+import { EVIDENCE_DIR, FLOWS_DIR, fromCompact, loadFlow, runFlow } from "./flow.js";
+import { Reporter, useColor } from "./report.js";
 
 /** `droidreplay run <flow> [--var k=v]... [--evidence dir]`: replays a flow with no model involved. */
 export async function runCli(args: string[]): Promise<number> {
@@ -38,9 +39,15 @@ export async function runCli(args: string[]): Promise<number> {
 
   const device = new Device();
   try {
-    const { flow } = await loadFlow(resolve(FLOWS_DIR), target);
-    const result = await runFlow(device, flow, { vars, evidenceDir });
-    console.log(result.text);
+    const { path, flow } = await loadFlow(resolve(FLOWS_DIR), target);
+    // Labels come from the flow as written, so ${secrets} are not printed.
+    const near = (p: string) => (relative(process.cwd(), p).startsWith("..") ? p : relative(process.cwd(), p) || p);
+    const rep = new Reporter(flow.steps.map(fromCompact), useColor(process.stdout));
+    console.log(rep.header(near(path)));
+    const result = await runFlow(device, flow, { vars, evidenceDir, onStep: (i, r) => console.log(rep.step(i, r)) });
+    if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
+    const evidence = result.shots ? near(result.evidenceDir) : undefined;
+    console.log(rep.footer(result.ok, result.secs, { failedStep: result.failedStep, evidence }));
     return result.ok ? 0 : 1;
   } catch (e) {
     console.error((e as Error).message);

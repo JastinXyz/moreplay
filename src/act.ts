@@ -4,7 +4,7 @@ import type { RunResult, StepResult } from "./device.js";
 
 /** What `act` needs from a device; `Device` implements it, tests pass a fake. */
 export interface ActDevice {
-  run(steps: object[], stopOnError?: boolean): Promise<RunResult>;
+  run(steps: object[], stopOnError?: boolean, onResult?: (r: StepResult) => void): Promise<RunResult>;
   shell(cmd: string): Promise<string>;
   screenshot(max: number, quality: number): Promise<Buffer>;
 }
@@ -50,10 +50,18 @@ export interface Execution {
 
 /**
  * Runs steps in order. Consecutive agent ops go to the device in one request; host ops run
- * here in between. Stops at the first failure.
+ * here in between. Stops at the first failure. `onStep` gets each step's result (and its
+ * 0-based index) as soon as the step finishes.
  */
-export async function executeSteps(device: ActDevice, steps: Step[], evidenceDir: string): Promise<Execution> {
+export async function executeSteps(
+  device: ActDevice,
+  steps: Step[],
+  evidenceDir: string,
+  onStep?: (result: StepResult, index: number) => void,
+): Promise<Execution> {
   const lines: string[] = [];
+  let emitted = 0;
+  const emit = onStep && ((r: StepResult) => onStep(r, emitted++));
   const outcomes: Outcome[] = [];
   let failedAt: number | undefined;
   let pending: Step[] = [];
@@ -62,7 +70,7 @@ export async function executeSteps(device: ActDevice, steps: Step[], evidenceDir
     if (!pending.length) return;
     const batch = pending;
     pending = [];
-    const r = await device.run(batch, true);
+    const r = await device.run(batch, true, emit);
     r.results.forEach((res, i) => {
       lines.push(fmt(res));
       outcomes.push({ step: batch[i], result: res });
@@ -89,6 +97,7 @@ export async function executeSteps(device: ActDevice, steps: Step[], evidenceDir
       result = { op: step.op, ok: false, ms: 0, error: (e as Error).message };
     }
     result.ms = Date.now() - t0;
+    emit?.(result);
     lines.push(fmt(result));
     outcomes.push({ step, result });
     if (!result.ok) failedAt = outcomes.length - 1;

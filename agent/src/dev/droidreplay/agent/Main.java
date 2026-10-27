@@ -127,8 +127,25 @@ public final class Main {
                 respond(out, 200, "text/plain", ("pong " + Version.NAME).getBytes(StandardCharsets.UTF_8));
             } else if (path.equals("/run") && method.equals("POST")) {
                 JSONObject req = new JSONObject(new String(body, StandardCharsets.UTF_8));
-                JSONObject res = device.run(req.getJSONArray("steps"), req.optBoolean("stopOnError", true));
-                respond(out, 200, "application/json", res.toString().getBytes(StandardCharsets.UTF_8));
+                boolean stopOnError = req.optBoolean("stopOnError", true);
+                if (req.optBoolean("stream")) {
+                    // One JSON line per step as it finishes, then the summary; the body ends when the connection closes.
+                    out.write("HTTP/1.1 200 X\r\nContent-Type: application/x-ndjson\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    JSONObject end;
+                    try {
+                        end = device.run(req.getJSONArray("steps"), stopOnError, r -> writeLine(out, r));
+                        end.remove("results");
+                    } catch (java.io.UncheckedIOException e) {
+                        return; // the client went away
+                    } catch (Exception e) {
+                        end = new JSONObject().put("ok", false).put("error", String.valueOf(e));
+                    }
+                    writeLine(out, end.put("done", true));
+                } else {
+                    JSONObject res = device.run(req.getJSONArray("steps"), stopOnError, null);
+                    respond(out, 200, "application/json", res.toString().getBytes(StandardCharsets.UTF_8));
+                }
             } else if (path.equals("/screenshot")) {
                 int max = Integer.parseInt(query.getOrDefault("max", "0"));
                 int quality = Integer.parseInt(query.getOrDefault("q", "80"));
@@ -160,6 +177,15 @@ public final class Main {
             if (state == 4) break;
         }
         return buf.toString("UTF-8").trim();
+    }
+
+    private static void writeLine(OutputStream out, JSONObject line) {
+        try {
+            out.write((line.toString() + "\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     private static void respond(OutputStream out, int status, String type, byte[] body) throws Exception {

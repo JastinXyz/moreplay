@@ -112,6 +112,19 @@ You can also write or edit these files by hand. Run one from the terminal:
 npx droidreplay run login --var email=test@example.com
 ```
 
+```
+RUN  .droidreplay/flows/login.yaml  5 steps
+
+  ✓ launch com.example.app         234 ms
+  ✓ tap "Sign in"                  148 ms
+  ✓ type "${email}" into "Email"   390 ms
+  ✓ wait_for "Home"                812 ms
+  ✓ screenshot login-ok            170 ms
+
+PASS  5 steps in 2.1 s
+Evidence  .droidreplay/evidence/login/20261027-123950
+```
+
 Each step waits for its button or text to appear, so there are no fixed sleeps. The command
 exits with 0 when every step passed and 1 when one failed, so it works in CI too.
 Screenshots are saved in `.droidreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
