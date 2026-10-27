@@ -197,12 +197,17 @@ export interface RunFlowOptions {
   waitMs?: number;
   /** Append the screen at the failing step (for a model to patch the flow). */
   screenOnFailure?: boolean;
+  /** Gets each step's result (0-based index) as soon as it finishes; the CLI prints them live. */
+  onStep?: (index: number, result: StepResult) => void;
 }
 
 export interface FlowRun {
   ok: boolean;
   text: string;
   evidenceDir: string;
+  /** Whether any screenshot was saved under evidenceDir. */
+  shots: boolean;
+  secs: string;
   /** 1-based step number that failed. */
   failedStep?: number;
 }
@@ -212,24 +217,33 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
   const evidenceDir = join(opts.evidenceDir, safeFlowName(flow.name), stamp);
   const t0 = Date.now();
-  const exec = await executeSteps(device, steps, evidenceDir);
+  const exec = await executeSteps(device, steps, evidenceDir, opts.onStep && ((r, i) => opts.onStep!(i, r)));
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   const shots = exec.outcomes.some((o) => o.step.op === "screenshot" && o.result.ok);
   const lines = exec.lines.map((l, i) => `${i + 1}. ${l}`);
+  const tail: string[] = [];
+  const done = (ok: boolean, failedStep?: number): FlowRun => ({
+    ok,
+    text: [...lines, ...tail].join("\n"),
+    evidenceDir,
+    shots,
+    secs,
+    ...(failedStep ? { failedStep } : {}),
+  });
 
   if (exec.failedAt === undefined) {
-    lines.push(`✓ flow ${flow.name} passed: ${steps.length} steps in ${secs}s${shots ? `, evidence in ${evidenceDir}` : ""}`);
-    return { ok: true, text: lines.join("\n"), evidenceDir };
+    tail.push(`✓ flow ${flow.name} passed: ${steps.length} steps in ${secs}s${shots ? `, evidence in ${evidenceDir}` : ""}`);
+    return done(true);
   }
   const n = exec.failedAt + 1;
-  lines.push(
+  tail.push(
     `✗ flow ${flow.name} failed at step ${n}/${steps.length} after ${secs}s: ${stringify(flow.steps[exec.failedAt], { lineWidth: 0 }).trim()}`,
   );
   if (opts.screenOnFailure) {
-    lines.push("--- screen", await screen(device));
-    lines.push(`Fix it with flow {action: "patch", name: "${flow.name}", index: ${n}, steps: [...]}, then run again.`);
+    tail.push("--- screen", await screen(device));
+    tail.push(`Fix it with flow {action: "patch", name: "${flow.name}", index: ${n}, steps: [...]}, then run again.`);
   }
-  return { ok: false, text: lines.join("\n"), evidenceDir, failedStep: n };
+  return done(false, n);
 }
 
 /** Replaces step `index` (1-based) with `steps` (zero steps deletes it). */

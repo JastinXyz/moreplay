@@ -157,15 +157,41 @@ export class Device {
     throw new Error(`agent did not start:\n${log}`);
   }
 
-  async run(steps: object[], stopOnError = true): Promise<RunResult> {
+  /** Runs steps in one request. With `onResult`, the agent streams each step's result as it finishes. */
+  async run(steps: object[], stopOnError = true, onResult?: (r: StepResult) => void): Promise<RunResult> {
     await this.ensureAgent();
     const res = await fetch(`http://127.0.0.1:${this.port}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ steps, stopOnError }),
+      body: JSON.stringify({ steps, stopOnError, stream: !!onResult }),
     });
     if (!res.ok) throw new Error(`agent error ${res.status}: ${await res.text()}`);
-    return (await res.json()) as RunResult;
+    if (!onResult) return (await res.json()) as RunResult;
+
+    // NDJSON: one line per step, then {"done": true, ok, ms[, error]}.
+    const results: StepResult[] = [];
+    let end: { ok: boolean; ms: number; error?: string } | undefined;
+    let buf = "";
+    const decoder = new TextDecoder();
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      buf += decoder.decode(chunk, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const msg = JSON.parse(line);
+        if (msg.done) {
+          end = msg;
+        } else {
+          results.push(msg as StepResult);
+          onResult(msg as StepResult);
+        }
+      }
+    }
+    if (!end) throw new Error("agent closed the stream early");
+    if (end.error) throw new Error(`agent error: ${end.error}`);
+    return { ok: end.ok, ms: end.ms, results };
   }
 
   async screenshot(max: number, quality: number): Promise<Buffer> {

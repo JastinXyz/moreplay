@@ -39,7 +39,12 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
 - `GET /ping` -> `pong <version>` (version baked in at build time)
 - `POST /run` body `{"steps":[...], "stopOnError":true}` ->
   `{"ok":bool, "ms":n, "results":[{"op","ok","ms","out"|"error","sel"?}]}`. `sel` is the stable
-  selector of the element a targeted step acted on (see Flows).
+  selector of the element a targeted step acted on (see Flows). With `"stream":true` the
+  response is NDJSON instead: one result object per step, written as the step finishes, then
+  `{"done":true, "ok", "ms"}` (or `{"done":true, "ok":false, "error"}` if the run itself
+  threw). Still one request, so no extra round trips; `droidreplay run` uses it to print each
+  step live (`Device.run(steps, stop, onResult)` -> `executeSteps(..., onLine)` ->
+  `runFlow({onLine})`). The MCP tools return one response, so they don't stream.
 - `GET /screenshot?max=<longest side, 0 = full>&q=<jpeg quality>` -> `image/jpeg`
 
 ## Steps

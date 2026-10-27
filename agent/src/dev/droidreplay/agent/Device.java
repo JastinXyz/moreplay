@@ -140,7 +140,8 @@ final class Device {
 
     private static final long DISMISS_SETTLE_MS = 300;
 
-    JSONObject run(JSONArray steps, boolean stopOnError) throws Exception {
+    /** Runs steps in order; `onResult` (may be null) gets each step's result as soon as it is known. */
+    JSONObject run(JSONArray steps, boolean stopOnError, java.util.function.Consumer<JSONObject> onResult) throws Exception {
         long t0 = SystemClock.uptimeMillis();
         JSONArray results = new JSONArray();
         boolean allOk = true;
@@ -170,6 +171,7 @@ final class Device {
             }
             r.put("ms", SystemClock.uptimeMillis() - s0);
             results.put(r);
+            if (onResult != null) onResult.accept(r);
             if (!r.getBoolean("ok") && stopOnError) break;
         }
         return new JSONObject().put("ok", allOk).put("results", results).put("ms", SystemClock.uptimeMillis() - t0);

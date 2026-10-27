@@ -1,0 +1,111 @@
+import type { Step } from "./act.js";
+import type { StepResult } from "./device.js";
+
+/**
+ * Test-runner style output for `droidreplay run`: one aligned line per step as it finishes,
+ * then a PASS/FAIL badge. Colors only on a TTY, and never with NO_COLOR set.
+ */
+export function useColor(stream: NodeJS.WriteStream): boolean {
+  if (process.env.NO_COLOR) return false;
+  if (process.env.FORCE_COLOR) return true;
+  return !!stream.isTTY;
+}
+
+const CODES = { green: 32, red: 31, yellow: 33, dim: 2, bold: 1, badgeOk: "30;42", badgeFail: "97;41", badgeRun: "30;46" } as const;
+type Style = keyof typeof CODES;
+
+const quote = (v: unknown) => JSON.stringify(String(v));
+
+/** Target of a step as written in the flow: "Sign in", #id, desc="..", 120,340, @4. */
+function target(s: Record<string, unknown>): string {
+  if (s.ref !== undefined) return `@${s.ref}`;
+  if (s.x !== undefined && s.y !== undefined) return `${s.x},${s.y}`;
+  const parts: string[] = [];
+  if (s.text !== undefined) parts.push(quote(s.text));
+  if (s.id !== undefined) parts.push(`#${s.id}`);
+  if (s.desc !== undefined) parts.push(`desc=${quote(s.desc)}`);
+  return parts.join(" ");
+}
+
+/** One-line label for a step, from the flow (so `${secret}` stays unexpanded). */
+export function describeStep(s: Step): string {
+  const t = target(s);
+  switch (s.op) {
+    case "launch":
+    case "stop_app":
+      return `${s.op} ${s.package}`;
+    case "type": {
+      const into = s.field !== undefined ? ` into ${quote(s.field)}` : t ? ` into ${t}` : "";
+      return `type ${quote(s.value ?? "")}${into}${s.submit ? " + enter" : ""}`;
+    }
+    case "scroll": {
+      const until = s.until && typeof s.until === "object" ? ` until ${target(s.until as Record<string, unknown>)}` : "";
+      return `scroll ${s.dir ?? "down"}${until}`;
+    }
+    case "key":
+      return `key ${s.key}`;
+    case "sleep":
+      return `sleep ${s.ms} ms`;
+    case "screenshot":
+      return s.name ? `screenshot ${s.name}` : "screenshot";
+    case "swipe":
+      return `swipe ${s.x1},${s.y1} -> ${s.x2},${s.y2}`;
+  }
+  return t ? `${s.op} ${t}` : s.op;
+}
+
+const MAX_LABEL = 48;
+const clip = (s: string) => (s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 1)}…` : s);
+
+export class Reporter {
+  private readonly labels: string[];
+  private readonly width: number;
+
+  constructor(
+    private readonly steps: Step[],
+    private readonly color: boolean,
+  ) {
+    this.labels = steps.map((s) => clip(describeStep(s)) + (s.optional ? " (optional)" : ""));
+    this.width = Math.max(...this.labels.map((l) => l.length), 10);
+  }
+
+  private paint(style: Style, text: string): string {
+    return this.color ? `\x1b[${CODES[style]}m${text}\x1b[0m` : text;
+  }
+
+  private badge(style: Style, text: string): string {
+    return this.color ? this.paint(style, ` ${text} `) : text;
+  }
+
+  header(file: string): string {
+    return `\n${this.badge("badgeRun", "RUN")}  ${file}  ${this.paint("dim", `${this.steps.length} steps`)}\n`;
+  }
+
+  /** The line for step `i` (0-based); a failed step gets its error indented below it. */
+  step(i: number, r: StepResult): string {
+    const label = this.labels[i].padEnd(this.width);
+    const skipped = r.ok && /^skipped/.test(r.out ?? "");
+    const ms = `${r.ms} ms`.padStart(8);
+    if (!r.ok) {
+      return `  ${this.paint("red", "✗")} ${label} ${this.paint("dim", ms)}\n      ${this.paint("red", r.error ?? "failed")}`;
+    }
+    if (skipped) return `  ${this.paint("yellow", "–")} ${label} ${this.paint("yellow", "skipped".padStart(8))}`;
+    const dismissed = /\(dismissed ([^)]*)\)/.exec(r.out ?? "");
+    const note = dismissed ? this.paint("dim", `  dismissed ${dismissed[1]}`) : "";
+    return `  ${this.paint("green", "✓")} ${label} ${this.paint(r.ms >= 1000 ? "yellow" : "dim", ms)}${note}`;
+  }
+
+  /** Steps after a failure that never ran. */
+  notRun(from: number): string[] {
+    return this.labels.slice(from).map((l) => `  ${this.paint("dim", `○ ${l.padEnd(this.width)}  not run`)}`);
+  }
+
+  footer(ok: boolean, secs: string, opts: { failedStep?: number; evidence?: string } = {}): string {
+    const n = this.steps.length;
+    const lines = [""];
+    if (ok) lines.push(`${this.badge("badgeOk", "PASS")}  ${n} steps in ${secs} s`);
+    else lines.push(`${this.badge("badgeFail", "FAIL")}  step ${opts.failedStep} of ${n} failed after ${secs} s`);
+    if (opts.evidence) lines.push(`${this.paint("dim", "Evidence")}  ${opts.evidence}`);
+    return lines.join("\n");
+  }
+}
