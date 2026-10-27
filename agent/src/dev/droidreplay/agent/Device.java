@@ -803,8 +803,9 @@ final class Device {
         switch (dir) {
             case "down": swipe(cx, cy + dy, cx, cy - dy, 250); break;
             case "up": swipe(cx, cy - dy, cx, cy + dy, 250); break;
-            case "left": swipe(cx + dx, cy, cx - dx, cy, 250); break;
-            default: swipe(cx - dx, cy, cx + dx, cy, 250); break;
+            // Like down/up: "left" shows what is to the left, so the finger moves right.
+            case "left": swipe(cx - dx, cy, cx + dx, cy, 250); break;
+            default: swipe(cx + dx, cy, cx - dx, cy, 250); break;
         }
     }
 
