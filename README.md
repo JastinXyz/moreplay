@@ -14,10 +14,10 @@ Raw numbers and method: [`spike/RESULTS.md`](spike/RESULTS.md).
 | | plain adb | mobilecli | droidreplay |
 |---|---|---|---|
 | Read the screen (warm) | 2.9-3.6 s | 2.2-3.3 s | 36-60 ms |
-| Read the screen (first call) | same | 11 s | 1-4 s (pushes and starts the agent) |
+| Read the screen (first call) | 2.9-3.6 s (nothing to start) | 11 s | 1-4 s (pushes and starts the agent) |
 | Tap x,y | 184 ms | 115-309 ms | 77-94 ms |
 | Screenshot to file | 1.1-1.4 s (PNG, 1.4 MB) | 0.8-1.2 s (PNG) | 160-170 ms (JPEG, full resolution) |
-| Screen as text (home screen) | 54 KB XML | 15-120 KB | ~1 KB (one line per element) |
+| Screen as text | 54 KB XML | 15-120 KB JSON | 1-2 KB (one line per element) |
 | Tool definitions sent to the model | n/a | ~7k tokens (34 tools) | ~800 tokens (4 tools) |
 
 A batch of steps (`act`) goes to the device in one request, and a saved flow replays with no
