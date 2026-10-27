@@ -37,7 +37,8 @@ digging through git history. If a doc says something the code no longer does, fi
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
-  device; `tools.test.mjs` checks the tool list and a ~2500-char budget for tool definitions;
+  device; `tools.test.mjs` checks the tool list, a 3200-char budget for tool definitions (JSON), and
+  `flow show`/`patch` on a path;
   `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the
   YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load; `maestro.test.mjs`
   covers both directions, a round trip, and the export/import CLIs.

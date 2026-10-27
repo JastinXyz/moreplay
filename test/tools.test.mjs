@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Listing tools never touches a device, so this runs in CI.
 test("exposes 4 tools and keeps their definitions small", async () => {
@@ -17,5 +20,25 @@ test("exposes 4 tools and keeps their definitions small", async () => {
     assert.ok(chars < 3200, `tool definitions grew to ${chars} chars (~${Math.round(chars / 4)} tokens)`);
   } finally {
     await client.close();
+  }
+});
+
+// show and patch never touch a device either.
+test("flow show and patch take a .yaml path outside the flows folder", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const client = new Client({ name: "test", version: "0" });
+  await client.connect(new StdioClientTransport({ command: "node", args: ["dist/index.js"], env: { ...process.env, DROIDREPLAY_FLOWS_DIR: join(dir, "flows") } }));
+  try {
+    const path = join(dir, "scratch", "login.yaml");
+    await mkdir(join(dir, "scratch"));
+    await writeFile(path, "name: login\nsteps:\n  - tap: A\n  - tap: B\n");
+    const shown = await client.callTool({ name: "flow", arguments: { action: "show", name: path } });
+    assert.match(shown.content[0].text, /tap: B/);
+    const patched = await client.callTool({ name: "flow", arguments: { action: "patch", name: path, index: 2, steps: [{ tap: "C" }] } });
+    assert.ok(!patched.isError, patched.content[0].text);
+    assert.match(await readFile(path, "utf8"), /tap: C/);
+  } finally {
+    await client.close();
+    await rm(dir, { recursive: true, force: true });
   }
 });

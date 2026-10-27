@@ -172,6 +172,12 @@ Run `npx -y droidreplay doctor` first; it names most problems.
 
 ## Configuration
 
+You usually need none of this: the AI can pass its own paths (a screenshot `name` or a flow
+`name` can be a full path, and `flow run` takes an `evidence` folder). These only set the
+defaults. Put them in the `env` block of the MCP config above, or with
+`claude mcp add droidreplay -e ANDROID_SERIAL=... -- npx -y droidreplay`. For the CLI, put them
+before the command: `ANDROID_SERIAL=... npx droidreplay run login`.
+
 | Variable | What it sets | Default |
 |---|---|---|
 | `ANDROID_SERIAL` | Which phone to use when several are connected | the only one |
