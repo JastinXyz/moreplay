@@ -1,8 +1,26 @@
 # droidreplay
 
-Fast Android MCP server. Let the AI walk a flow once, then replay it with no model at all. An 11 KB agent runs on the device through `app_process` (no APK to
+Fast Android MCP server. Let the AI walk a flow once, then replay it with no model at all. A 17 KB agent runs on the device through `app_process` (no APK to
 install) and keeps one UiAutomation connection open, so reading the screen takes ~30 ms
 instead of ~3 s, and a whole batch of steps runs in one request.
+
+## How fast
+
+Measured against [mobilecli](https://github.com/mobile-next/mobilecli) 1.0.21, the device
+layer of mobile-mcp, on the same phone (Android 14, HyperOS). droidreplay times are end to end
+from an MCP client on the laptop. Raw numbers and method: [`spike/RESULTS.md`](spike/RESULTS.md).
+
+| | mobilecli | droidreplay |
+|---|---|---|
+| Read the screen (warm) | 2.2-3.3 s | 21-55 ms |
+| Read the screen (first call) | 11 s | 1-4 s (pushes and starts the agent) |
+| Tap x,y | 115-309 ms | 77-94 ms |
+| Screenshot to file | 0.8-1.2 s (PNG) | 61-99 ms (JPEG, full resolution) |
+| Screen as text | 15-120 KB | ~2 KB (one line per element) |
+| Tool definitions sent to the model | ~7k tokens (34 tools) | ~800 tokens (4 tools) |
+
+A batch of steps (`act`) goes to the device in one request, and a saved flow replays with no
+model call between steps.
 
 ## Requirements
 
