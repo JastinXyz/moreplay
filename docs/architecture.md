@@ -173,6 +173,11 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   recorder. observe, apps and wait_idle are dropped; `wait` is stripped. A `ref` becomes the
   agent's `sel`: unique id, else unique label, else id + own text, else label; with neither,
   the tapped coordinates. For `type`, a label selector is stored as `field`.
+- **Secrets while recording**: `flow record{name, vars}` keeps the vars for the session. `act`
+  fills `${var}` from them before the steps reach the device (a `${var}` with no value fails
+  before anything runs), and the recorder writes every occurrence of a value (3+ chars,
+  longest first) back as `${var}` (`hideVars`), also when the model typed the value itself.
+  So a recorded login never holds the PIN; replay takes it from `vars` / `--var`.
 - **Replay** (`flow run`, or `droidreplay run` with no model): `${var}` substitution (missing
   vars fail before anything runs), `wait: 5000` on targeted steps and `timeout: 5000` on
   wait_for/wait_gone, then one `executeSteps`. Screenshot steps first wait for the screen to

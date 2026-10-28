@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAct } from "../dist/act.js";
 import {
-  flowName, fromCompact, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
+  flowName, fromCompact, hideVars, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
 } from "../dist/flow.js";
 
 /** Fake device that answers each step from `answer(step)`; records the batches it got. */
@@ -189,4 +189,22 @@ test("runFlow hands each step result over as it finishes", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("recording with vars saves ${var}, never the value", () => {
+  const vars = { PIN: "482913", PHONE: "81234567890", X: "7" };
+  const rec = new Recorder("login", vars);
+  const ok = { op: "type", ok: true, ms: 1 };
+  // The model typed the real values (act already substituted them, or it typed them itself).
+  rec.add({ op: "type", field: "PIN", value: "482913" }, ok);
+  rec.add({ op: "type", field: "Phone", value: "+6281234567890", submit: true }, ok);
+  rec.add({ op: "tap", text: "7" }, { op: "tap", ok: true, ms: 1 });
+  assert.deepEqual(rec.toFile().steps, [
+    { type: { field: "PIN", value: "${PIN}" } },
+    { type: { field: "Phone", value: "+62${PHONE}", submit: true } },
+    { tap: "7" }, // values under 3 chars are left alone
+  ]);
+  assert.deepEqual(hideVars({ op: "tap", text: "a" }, {}), { op: "tap", text: "a" });
+  // A longer value wins over one it contains.
+  assert.deepEqual(hideVars({ op: "type", value: "123456" }, { A: "123", B: "123456" }), { op: "type", value: "${B}" });
 });

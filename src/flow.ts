@@ -92,13 +92,36 @@ export function toRecorded(step: Step, result: StepResult): Step | null {
   return m ? ({ ...rest, x: Number(m[1]), y: Number(m[2]) } as Step) : (rest as Step);
 }
 
+/**
+ * Puts `${name}` back wherever a var's value shows up in a string, so a recorded flow never
+ * holds the secret itself, even when the model typed the value instead of the placeholder.
+ * Values under 3 characters are left alone; replacing every "1" would wreck the flow.
+ */
+export function hideVars(step: Step, vars: Record<string, string>): Step {
+  const pairs = Object.entries(vars)
+    .filter(([, v]) => v.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length);
+  if (!pairs.length) return step;
+  const hide = (v: unknown): unknown => {
+    if (typeof v === "string") return pairs.reduce((s, [k, val]) => s.split(val).join(`\${${k}}`), v);
+    if (Array.isArray(v)) return v.map(hide);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, hide(x)]));
+    return v;
+  };
+  return hide(step) as Step;
+}
+
 export class Recorder {
   readonly steps: Step[] = [];
-  constructor(readonly name: string) {}
+  /** `vars` fill `${name}` in act steps while recording and are hidden again in what is saved. */
+  constructor(
+    readonly name: string,
+    readonly vars: Record<string, string> = {},
+  ) {}
 
   add(step: Step, result: StepResult): void {
     const recorded = toRecorded(step, result);
-    if (recorded) this.steps.push(recorded);
+    if (recorded) this.steps.push(hideVars(recorded, this.vars));
   }
 
   toFile(): FlowFile {

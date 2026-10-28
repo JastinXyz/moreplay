@@ -42,3 +42,15 @@ test("flow show and patch take a .yaml path outside the flows folder", async () 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("act refuses a ${var} it has no value for, before touching a device", async () => {
+  const client = new Client({ name: "test", version: "0" });
+  await client.connect(new StdioClientTransport({ command: "node", args: ["dist/index.js"] }));
+  try {
+    const r = await client.callTool({ name: "act", arguments: { steps: [{ op: "type", value: "${PIN}" }] } });
+    assert.ok(r.isError);
+    assert.match(r.content[0].text, /missing variable\(s\): PIN/);
+  } finally {
+    await client.close();
+  }
+});
