@@ -53,6 +53,7 @@ function toSelector(s: Record<string, unknown>): Record<string, unknown> | null 
   else if ("desc" in s) sel.text = maestroText(s.desc);
   else if ("field" in s) sel.text = maestroText(s.field);
   if ("id" in s) sel.id = s.id;
+  if ("index" in s) sel.index = s.index;
   // Same names on both sides; an anchor is plain text or a selector of its own.
   for (const k of RELATIVE_KEYS) {
     const a = s[k];
@@ -128,6 +129,28 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
       return ["waitForAnimationToEnd"];
     case "screenshot":
       return [{ takeScreenshot: String(s.name ?? "screenshot") }];
+    case "hide_keyboard":
+      return ["hideKeyboard"];
+    case "repeat": {
+      const out: Record<string, unknown> = {};
+      if (s.times !== undefined) out.times = s.times;
+      if (s.while && typeof s.while === "object") {
+        const w = s.while as Record<string, unknown>;
+        const k = "notVisible" in w ? "notVisible" : "visible";
+        const t = w[k];
+        const sel = toSelector(t && typeof t === "object" ? (t as Record<string, unknown>) : { text: t });
+        if (!sel) return null;
+        out.while = { [k]: sel };
+      }
+      const cmds: Cmd[] = [];
+      for (const raw of (s.steps as Record<string, unknown>[] | undefined) ?? []) {
+        const inner = stepToMaestro(fromCompact(raw), appId);
+        if (!inner) return null;
+        cmds.push(...inner);
+      }
+      out.commands = cmds;
+      return [{ repeat: out }];
+    }
     case "run_flow": {
       const out: Record<string, unknown> = {};
       if (s.when && typeof s.when === "object") {
@@ -187,6 +210,7 @@ function fromSelector(v: unknown): Record<string, unknown> | string {
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
     if (k === "text") out.text = ourText(String(x));
     else if (k === "id") out.id = String(x);
+    else if (k === "index") out.index = Number(x);
     else if (k === "optional") out.optional = x === true;
     else if (k === "point") {
       const m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(String(x));
@@ -277,6 +301,24 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
       return [{ op: "wait_idle", ...(obj.timeout !== undefined ? { timeout: Number(obj.timeout) } : {}) }];
     case "takeScreenshot":
       return [{ op: "screenshot", name: String(typeof arg === "object" && arg ? obj.path : arg ?? "screenshot") }];
+    case "hideKeyboard":
+      return [{ op: "hide_keyboard" }];
+    case "repeat": {
+      const step: Step = { op: "repeat" };
+      if (obj.times !== undefined) step.times = Number(obj.times);
+      if (obj.while !== undefined) {
+        const w = (obj.while ?? {}) as Record<string, unknown>;
+        const keys = Object.keys(w);
+        if (keys.length !== 1 || (keys[0] !== "visible" && keys[0] !== "notVisible")) throw new Error(`repeat while ${keys.join(", ")}`);
+        const t = fromSelector(w[keys[0]]);
+        if (typeof t === "string") throw new Error(t);
+        const tk = Object.keys(t);
+        step.while = { [keys[0]]: tk.length === 1 && tk[0] === "text" ? t.text : t };
+      }
+      if (step.times === undefined && step.while === undefined) throw new Error("repeat needs times or while");
+      step.steps = convertCommands((obj.commands as Cmd[] | undefined) ?? [], appId).map(toCompact);
+      return [step];
+    }
     case "runFlow": {
       if (typeof arg === "string") return [{ op: "run_flow", file: arg }];
       const step: Step = { op: "run_flow" };

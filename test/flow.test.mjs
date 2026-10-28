@@ -258,3 +258,25 @@ test("substitute leaves a run_flow's own steps for later, with its own vars", ()
   const out = substitute([{ op: "run_flow", vars: { A: "${X}" }, steps: [{ tap: "${A}" }] }], { X: "1" });
   assert.deepEqual(out, [{ op: "run_flow", vars: { A: "1" }, steps: [{ tap: "${A}" }] }]);
 });
+
+test("repeat: times, while checked before each round, a cap for while alone, inner failures named", async () => {
+  let left = 3; // "Next" shows on three onboarding pages
+  const d = fakeDevice((s) => {
+    if (s.op === "wait_for" && s.timeout === 0) return left > 0 ? { ok: true, out: "found" } : { ok: false, error: 'timeout waiting for text="Next"' };
+    if (s.op === "tap" && s.text === "Next") left--;
+    return { ok: true, out: "done" };
+  });
+  const run = await runFlow(d, { name: "onboarding", steps: [{ repeat: { times: 6, while: { visible: "Next" }, steps: [{ tap: "Next" }] } }] }, { evidenceDir: tmpdir() });
+  assert.match(run.text, /✓ repeat \d+ms ran 3 times/);
+
+  const twice = await runFlow(fakeDevice(), { name: "t", steps: [{ repeat: { times: 2, steps: [{ scroll: "down" }] } }] }, { evidenceDir: tmpdir() });
+  assert.match(twice.text, /ran 2 times/);
+
+  const always = fakeDevice((s) => (s.op === "wait_for" ? { ok: true, out: "found" } : { ok: true, out: "done" }));
+  const stuck = await runFlow(always, { name: "s", steps: [{ repeat: { while: { visible: "Spinner" }, steps: [{ key: "back" }] } }] }, { evidenceDir: tmpdir() });
+  assert.match(stuck.text, /while still true after 100 rounds/);
+
+  const bad = fakeDevice((s) => (s.text === "B" ? { ok: false, error: "not found" } : { ok: true, out: "done" }));
+  const failed = await runFlow(bad, { name: "f", steps: [{ repeat: { times: 2, steps: [{ tap: "A" }, { tap: "B" }] } }] }, { evidenceDir: tmpdir() });
+  assert.match(failed.text, /round 1, step 2 \(tap\) failed: not found/);
+});

@@ -39,13 +39,14 @@ export async function startServer(): Promise<void> {
     "act",
     {
       description: [
-        "Run steps in order in ONE call; batch everything you can. Stops at the first failure (optional:true skips a missing target). Returns the screen.",
-        "Target (tap/long_press/type/wait_*): ref | x,y | text (also content-desc; exact, else contains; '/re/' = regex) | id | desc, + below/above/leftOf/rightOf:<target>.",
+        "Run steps in order in ONE call; batch everything you can. Stops at the first failure (optional:true skips if missing). Returns the screen.",
+        "Target (tap/long_press/type/wait_*): ref | x,y | text (also content-desc; exact, else contains; '/re/' = regex) | id | desc, + below/above/leftOf/rightOf:<target>, index:n.",
         "Ops: tap, long_press{ms}, type{value, field?=its label, submit?, append?} (no target = focused),",
         "scroll{dir:down|up|left|right, until?:target, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
         "wait_for{target, timeout?=5000}, wait_gone{target, timeout?}, wait_idle{quietMs?=300, timeout?}, sleep{ms},",
-        "launch{package}, stop_app{package}, clear_app{package} (wipe data), apps{filter?}, screenshot{name} (file name or path; saved, not shown), observe,",
-        "run_flow{file? | steps?, vars?, when?:{visible|notVisible: target}}: a subflow (file relative to the flow), skipped when `when` fails.",
+        "launch{package}, stop_app{package}, clear_app{package} (wipe data), apps{filter?}, screenshot{name} (name or path; saved, not shown), observe, hide_keyboard,",
+        "repeat{times? | while?:{visible|notVisible: target}, steps},",
+        "run_flow{file? | steps?, vars?, when?:{visible|notVisible: target}}: subflow (file relative to the flow), skipped if when fails.",
       ].join("\n"),
       inputSchema: {
         steps: z.array(z.object({ op: z.string() }).passthrough()).min(1),

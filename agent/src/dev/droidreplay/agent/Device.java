@@ -191,6 +191,7 @@ final class Device {
             case "wait_gone": return waitFor(s, true);
             case "wait_idle": return waitIdle(s.optInt("quietMs", 300), s.optInt("timeout", 5000));
             case "sleep": SystemClock.sleep(s.getLong("ms")); return "ok";
+            case "hide_keyboard": return hideKeyboard();
             default: throw new IllegalArgumentException("unknown op: " + op);
         }
     }
@@ -525,6 +526,7 @@ final class Device {
         lastSel = new JSONObject();
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
         for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
+        if (s.has("index")) lastSel.put("index", s.optInt("index"));
         AccessibilityNodeInfo target = n;
         // Text usually sits on a child of the thing that is actually clickable.
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
@@ -632,6 +634,7 @@ final class Device {
         List<AccessibilityNodeInfo> all = new ArrayList<>();
         for (Win w : windows()) flatten(w.root, all);
         if (hasRelative(s)) return findRelative(s, own, all);
+        if (s.has("index")) return nth(s, all);
         AccessibilityNodeInfo partial = null;
         for (AccessibilityNodeInfo n : all) {
             int m = match(n, s);
@@ -664,9 +667,8 @@ final class Device {
         } catch (Exception e) {
             throw new IllegalArgumentException("bad anchor: " + e.getMessage());
         }
-        AccessibilityNodeInfo best = null;
-        int bestMatch = 0;
-        double bestDist = Double.MAX_VALUE;
+        List<AccessibilityNodeInfo> found = new ArrayList<>();
+        List<double[]> rank = new ArrayList<>(); // {match, distance}
         for (AccessibilityNodeInfo n : all) {
             int m = own ? match(n, s) : (n.isClickable() ? 2 : 0);
             if (m == 0) continue;
@@ -682,13 +684,55 @@ final class Device {
                 dist += Math.hypot(b.centerX() - a.centerX(), b.centerY() - a.centerY());
             }
             if (!ok) continue;
-            if (m > bestMatch || (m == bestMatch && dist < bestDist)) {
-                best = n;
-                bestMatch = m;
-                bestDist = dist;
-            }
+            found.add(n);
+            rank.add(new double[]{m, dist});
         }
-        return best;
+        // Exact before contains, then nearest first; `index` counts in that order.
+        Integer[] order = new Integer[found.size()];
+        for (int i = 0; i < order.length; i++) order[i] = i;
+        java.util.Arrays.sort(order, (x, y) -> {
+            double[] a = rank.get(x), b = rank.get(y);
+            return a[0] != b[0] ? Double.compare(b[0], a[0]) : Double.compare(a[1], b[1]);
+        });
+        int idx = s.optInt("index", 0);
+        return idx >= 0 && idx < order.length ? found.get(order[idx]) : null;
+    }
+
+    /**
+     * `index` without a position: the n-th match (0-based) in reading order, top to bottom then
+     * left to right; exact matches if there are any, else contains matches.
+     */
+    private static AccessibilityNodeInfo nth(JSONObject s, List<AccessibilityNodeInfo> all) {
+        List<AccessibilityNodeInfo> exact = new ArrayList<>();
+        List<AccessibilityNodeInfo> partial = new ArrayList<>();
+        for (AccessibilityNodeInfo n : all) {
+            int m = match(n, s);
+            if (m == 2) exact.add(n);
+            else if (m == 1) partial.add(n);
+        }
+        List<AccessibilityNodeInfo> list = exact.isEmpty() ? partial : exact;
+        list.sort((x, y) -> {
+            Rect a = new Rect(), b = new Rect();
+            x.getBoundsInScreen(a);
+            y.getBoundsInScreen(b);
+            return a.top != b.top ? Integer.compare(a.top, b.top) : Integer.compare(a.left, b.left);
+        });
+        int idx = s.optInt("index", 0);
+        return idx >= 0 && idx < list.size() ? list.get(idx) : null;
+    }
+
+    /** Back closes the keyboard; waits until the system no longer lists its window. */
+    private String hideKeyboard() {
+        windows();
+        if (!keyboardShown) return "keyboard already hidden";
+        key("back");
+        long deadline = SystemClock.uptimeMillis() + 1500;
+        while (SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(POLL_MS);
+            windows();
+            if (!keyboardShown) return "hidden";
+        }
+        throw new IllegalStateException("keyboard still shown after back");
     }
 
     /** Whether b's center lies past a's edge on that side. */
@@ -771,6 +815,7 @@ final class Device {
         for (String k : new String[]{"text", "id", "desc"}) {
             if (s.has(k)) sb.append(sb.length() > 0 ? " " : "").append(k).append("=\"").append(s.optString(k)).append('"');
         }
+        if (s.has("index")) sb.append(sb.length() > 0 ? " " : "").append("index ").append(s.optInt("index"));
         for (String k : RELATIVE) {
             if (!s.has(k)) continue;
             Object v = s.opt(k);
@@ -933,7 +978,7 @@ final class Device {
     private String type(JSONObject s) throws Exception {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
-        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "below", "above", "leftOf", "rightOf"}) if (s.has(k)) sel.put(k, s.opt(k));
+        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "index", "below", "above", "leftOf", "rightOf"}) if (s.has(k)) sel.put(k, s.opt(k));
         if (s.has("field")) sel.put("text", s.optString("field"));
         if (sel.length() > (sel.has("wait") ? 1 : 0)) {
             tap(sel, false);

@@ -12,7 +12,7 @@ export interface ActDevice {
 export type Step = { op: string } & Record<string, unknown>;
 
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
-export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot", "run_flow"]);
+export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot", "run_flow", "repeat"]);
 
 // How long the tree must stay unchanged before a screenshot step captures it.
 const SETTLE_MS = 400;
@@ -83,6 +83,30 @@ async function runSubflow(device: ActDevice, step: Step, evidenceDir: string, su
   return `ran ${steps.length} steps`;
 }
 
+// `repeat` with only `while` stops here instead of looping forever.
+const MAX_REPEAT = 100;
+
+/** Runs a repeat step: `steps` up to `times`, while `while` holds (checked before each round). */
+async function runRepeat(device: ActDevice, step: Step, evidenceDir: string, sub?: Subflows): Promise<string> {
+  if (!sub) throw new Error("repeat is not available here");
+  if (!Array.isArray(step.steps)) throw new Error("repeat needs steps");
+  const times = step.times === undefined ? undefined : Number(step.times);
+  if (times === undefined && step.while === undefined) throw new Error("repeat needs times or while");
+  const limit = times ?? MAX_REPEAT;
+  let n = 0;
+  for (; n < limit; n++) {
+    if (step.while !== undefined && !(await conditionMet(device, step.while))) break;
+    const steps = sub.prepare(step.steps as Record<string, unknown>[], sub.vars);
+    const exec = await executeSteps(device, steps, evidenceDir, undefined, { ...sub, depth: (sub.depth ?? 0) + 1 });
+    if (exec.failedAt !== undefined) {
+      const o = exec.outcomes[exec.failedAt];
+      throw new Error(`round ${n + 1}, step ${exec.failedAt + 1} (${o.step.op}) failed: ${o.result.error ?? ""}`);
+    }
+  }
+  if (times === undefined && n === limit) throw new Error(`while still true after ${MAX_REPEAT} rounds`);
+  return `ran ${n} time${n === 1 ? "" : "s"}`;
+}
+
 export interface ActOptions {
   observeAfter?: boolean;
   evidenceDir: string;
@@ -149,7 +173,10 @@ export async function executeSteps(
       // Evidence must show the screen a tap led to, not the transition. Replays tap and shoot
       // back to back, so let the screen settle first.
       if (step.op === "screenshot") await device.run([{ op: "wait_idle", quietMs: SETTLE_MS, timeout: 3000 }]);
-      const out = step.op === "run_flow" ? await runSubflow(device, step, evidenceDir, subflows) : await hostOp(device, step, evidenceDir);
+      const out =
+        step.op === "run_flow" ? await runSubflow(device, step, evidenceDir, subflows)
+        : step.op === "repeat" ? await runRepeat(device, step, evidenceDir, subflows)
+        : await hostOp(device, step, evidenceDir);
       result = { op: step.op, ok: true, ms: 0, out };
     } catch (e) {
       result = { op: step.op, ok: false, ms: 0, error: (e as Error).message };
