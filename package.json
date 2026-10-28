@@ -1,11 +1,11 @@
 {
-  "name": "droidreplay",
+  "name": "moreplay",
   "version": "0.1.0",
   "description": "Fast Android MCP server: no APK install, on-device waits and batching",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "droidreplay": "dist/index.js"
+    "moreplay": "dist/index.js"
   },
   "files": [
     "dist",
@@ -17,7 +17,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build:agent": "./agent/build.sh && mkdir -p assets && cp agent/build/droidreplay.jar assets/",
+    "build:agent": "./agent/build.sh && mkdir -p assets && cp agent/build/moreplay.jar assets/",
     "build": "npm run build:agent && tsc",
     "dev": "tsc --watch",
     "test": "tsc && node --test \"test/*.test.mjs\"",
@@ -35,11 +35,11 @@
   "author": "JastinXyz",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JastinXyz/droidreplay.git"
+    "url": "git+https://github.com/JastinXyz/moreplay.git"
   },
-  "homepage": "https://github.com/JastinXyz/droidreplay#readme",
+  "homepage": "https://github.com/JastinXyz/moreplay#readme",
   "bugs": {
-    "url": "https://github.com/JastinXyz/droidreplay/issues"
+    "url": "https://github.com/JastinXyz/moreplay/issues"
   },
   "keywords": [
     "mcp",

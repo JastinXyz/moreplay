@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. droidreplay is small on purpose: a Java agent on the device and a
+Thanks for helping. moreplay is small on purpose: a Java agent on the device and a
 TypeScript MCP server on the laptop. Read `docs/architecture.md` first.
 
 ## Setup

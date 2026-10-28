@@ -1,0 +1,10 @@
+name: webview-search
+dismiss: [Lanjut ke aplikasi, Deny]
+steps:
+  - stop_app: com.webview.space
+  - launch: com.webview.space
+  - tap: {text: OPEN BRAVE SEARCH, wait: 20000}
+  - type: {id: searchbox, value: "${query}", wait: 20000}
+  - key: enter
+  - wait_for: {text: Android Developers, timeout: 20000}
+  - screenshot: results

@@ -2,7 +2,7 @@ import type { Step } from "./act.js";
 import type { StepResult } from "./device.js";
 
 /**
- * Test-runner style output for `droidreplay run`: one aligned line per step as it finishes,
+ * Test-runner style output for `moreplay run`: one aligned line per step as it finishes,
  * then a PASS/FAIL badge. Colors only on a TTY, and never with NO_COLOR set.
  */
 export function useColor(stream: NodeJS.WriteStream): boolean {
@@ -199,7 +199,7 @@ export function junitXml(results: FlowReport[], skipped: { file: string; name: s
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<testsuites tests="${results.length + skipped.length}" failures="${failures}" skipped="${skipped.length}" time="${secs.toFixed(3)}">`,
-    `<testsuite name="droidreplay" tests="${results.length + skipped.length}" failures="${failures}" skipped="${skipped.length}" time="${secs.toFixed(3)}">`,
+    `<testsuite name="moreplay" tests="${results.length + skipped.length}" failures="${failures}" skipped="${skipped.length}" time="${secs.toFixed(3)}">`,
     ...cases,
     `</testsuite>`,
     `</testsuites>`,

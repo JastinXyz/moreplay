@@ -5,13 +5,13 @@ import { collectFlows, EVIDENCE_DIR, FLOWS_DIR, fromCompact, loadFlow, pickByTag
 import { junitXml, Reporter, suiteSummary, useColor, type FlowReport } from "./report.js";
 
 const USAGE =
-  "usage: droidreplay run <flow name, .yaml path or folder>... [--var key=value]... [--evidence dir]\n" +
+  "usage: moreplay run <flow name, .yaml path or folder>... [--var key=value]... [--evidence dir]\n" +
   "                       [--include-tags a,b] [--exclude-tags c] [--junit report.xml]";
 
 const tagList = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
 
 /**
- * `droidreplay run <flow|folder>... [--var k=v]... [--evidence dir] [--include-tags a,b]
+ * `moreplay run <flow|folder>... [--var k=v]... [--evidence dir] [--include-tags a,b]
  * [--exclude-tags c]`: replays flows with no model involved, one after another on one agent.
  * Exit 0 when every flow that ran passed, 1 when one failed (or none matched), 2 on bad usage.
  */

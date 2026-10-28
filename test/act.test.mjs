@@ -37,7 +37,7 @@ function fakeDevice({ fail = [], shell = {} } = {}) {
   };
 }
 
-const opts = { evidenceDir: join(tmpdir(), "droidreplay-test-unused"), observeAfter: false };
+const opts = { evidenceDir: join(tmpdir(), "moreplay-test-unused"), observeAfter: false };
 
 test("consecutive agent ops go to the device in one request", async () => {
   const d = fakeDevice();
@@ -86,7 +86,7 @@ test("apps filters and sorts third-party packages", async () => {
 });
 
 test("screenshot step saves an evidence file with a safe name", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const d = fakeDevice();
     const out = await runAct(d, [{ op: "screenshot", name: "TC 03: login ok" }], { evidenceDir: dir, observeAfter: false });
@@ -99,7 +99,7 @@ test("screenshot step saves an evidence file with a safe name", async () => {
 });
 
 test("screenshot step saves to a path the caller chose", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const target = join(dir, "scratch", "login");
     const out = await runAct(fakeDevice(), [{ op: "screenshot", name: target }], { evidenceDir: join(dir, "evidence"), observeAfter: false });
@@ -172,7 +172,7 @@ test("an agent batch gets time for the waits it asks for", async () => {
 });
 
 test("install_app installs with adb (-g on grant) and refuses a missing file", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const apk = join(dir, "app.apk");
     await writeFile(apk, "apk");

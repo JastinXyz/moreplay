@@ -26,11 +26,11 @@ function report(skipped: string[]): void {
   if (skipped.length) console.error(`skipped (no counterpart):\n${skipped.map((s) => `  ${s}`).join("\n")}`);
 }
 
-/** `droidreplay export <flow> [--app-id pkg] [--out file]`: a flow as Maestro YAML. */
+/** `moreplay export <flow> [--app-id pkg] [--out file]`: a flow as Maestro YAML. */
 export async function exportCli(args: string[]): Promise<number> {
   const p = parseArgs(args, ["--app-id", "--out"]);
   if (!p || p.pos.length !== 1) {
-    console.error("usage: droidreplay export <flow name or .yaml path> [--app-id package] [--out file]");
+    console.error("usage: moreplay export <flow name or .yaml path> [--app-id package] [--out file]");
     return 2;
   }
   try {
@@ -50,11 +50,11 @@ export async function exportCli(args: string[]): Promise<number> {
   }
 }
 
-/** `droidreplay import <maestro.yaml> [--name n] [--out path]`: saves a Maestro file as a flow. */
+/** `moreplay import <maestro.yaml> [--name n] [--out path]`: saves a Maestro file as a flow. */
 export async function importCli(args: string[]): Promise<number> {
   const p = parseArgs(args, ["--name", "--out"]);
   if (!p || p.pos.length !== 1) {
-    console.error("usage: droidreplay import <maestro .yaml> [--name flow-name] [--out file.yaml]");
+    console.error("usage: moreplay import <maestro .yaml> [--name flow-name] [--out file.yaml]");
     return 2;
   }
   try {

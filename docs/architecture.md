@@ -4,7 +4,7 @@
 MCP client (Claude Code, ...)
    │ stdio (MCP)
    ▼
-droidreplay server (Node, src/)            laptop
+moreplay server (Node, src/)            laptop
    │ adb push / adb shell app_process / adb forward tcp:N -> tcp:9070
    ▼
 agent (Java jar in /data/local/tmp)        device, runs as the shell user
@@ -18,7 +18,7 @@ apps on screen
 1. First tool call runs `Device.ensureAgent()`: pick the device (`ANDROID_SERIAL` or the only
    one connected), kill a leftover agent, push the jar only if its md5 differs from the copy on
    the device, `adb forward tcp:0 tcp:9070`, spawn
-   `adb shell CLASSPATH=/data/local/tmp/droidreplay.jar app_process / dev.droidreplay.agent.Main 9070`.
+   `adb shell CLASSPATH=/data/local/tmp/moreplay.jar app_process / dev.moreplay.agent.Main 9070`.
 2. Wait for `GET /ping` to answer `pong <version>` with the server's own `package.json`
    version (up to 8 s). A different version is reported as a stale agent. If the agent log
    mentions an existing UiAutomation registration, report that another tool holds the slot.
@@ -37,7 +37,7 @@ from AOSP `cmds/uiautomator` and openatx/android-uiautomator-server-jar.
 When a step fails, `executeSteps` reads the crash buffer since the batch began (`logcat -b crash -T`)
 and, if the app died, appends `app crashed:` with the FATAL EXCEPTION header, the exception and
 its top four frames to that step's error. Only on failure (a passing batch costs nothing extra)
-and only at the top level (a subflow's failure is not reported twice). `droidreplay run` prints
+and only at the top level (a subflow's failure is not reported twice). `moreplay run` prints
 the crash under the failed step once the flow stops, since step lines stream before it is known.
 
 ## Timeouts
@@ -58,7 +58,7 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
   selector of the element a targeted step acted on (see Flows). With `"stream":true` the
   response is NDJSON instead: one result object per step, written as the step finishes, then
   `{"done":true, "ok", "ms"}` (or `{"done":true, "ok":false, "error"}` if the run itself
-  threw). Still one request, so no extra round trips; `droidreplay run` uses it to print each
+  threw). Still one request, so no extra round trips; `moreplay run` uses it to print each
   step live (`Device.run(steps, stop, onResult)` -> `executeSteps(..., onStep)` ->
   `runFlow({onStep})`). The MCP tools return one response, so they don't stream.
 - `GET /screenshot?max=<longest side, 0 = full>&q=<jpeg quality>` -> `image/jpeg`
@@ -115,7 +115,7 @@ measured as the union of every window the system lists.
 | logs | `package`, `level` (V D I W E F, default W), `since` (`30s`, `2m`, `1h`; default 60s), `lines` (default 50, max 500) | server (`logcat -d -v brief -T <since>`, `--pid` while the app runs, else its crash buffer). Long lines are cut at 240 chars and repeats folded into `(xN)` to keep tokens down |
 | open_link | `url` (one line, single-quoted), optional `package` | server (`am start -W -a VIEW -d`; an `Error:` line fails the step) |
 | permissions | `package`, `grant` (names or `"all"`), `revoke`; `CAMERA` means `android.permission.CAMERA` | server (`pm grant/revoke`; `all` = the app's requested permissions from `dumpsys package`, skipping the ones pm refuses) |
-| screenshot | `name`: a file name (saved in `.droidreplay/evidence`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |
+| screenshot | `name`: a file name (saved in `.moreplay/evidence`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |
 
 The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server ops, executes them in order,
 stops at the first failure, then (unless `observe_after: false`) waits for idle and appends the
@@ -195,12 +195,12 @@ of the list.
 
 ## Flows (src/flow.ts)
 
-A flow is a YAML file in `.droidreplay/flows` (relative to where the server or CLI runs), or
-anywhere else; there is no config for these folders. Every `flow` action and `droidreplay run`
+A flow is a YAML file in `.moreplay/flows` (relative to where the server or CLI runs), or
+anywhere else; there is no config for these folders. Every `flow` action and `moreplay run`
 take a name (looked up in that folder, made safe so it cannot leave it) or a path (has a slash
 or ends in `.yaml`, used as given). `record{name}` with a path saves there; `patch` writes back
-to the file it loaded. Evidence defaults to `.droidreplay/evidence`; `run{evidence}` (CLI:
-`--evidence`) sets the folder for one run, and `droidreplay import --out` picks the output
+to the file it loaded. Evidence defaults to `.moreplay/evidence`; `run{evidence}` (CLI:
+`--evidence`) sets the folder for one run, and `moreplay import --out` picks the output
 file, so a model can keep files in its own scratch space:
 
 ```yaml
@@ -227,7 +227,7 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   before anything runs), and the recorder writes every occurrence of a value (3+ chars,
   longest first) back as `${var}` (`hideVars`), also when the model typed the value itself.
   So a recorded login never holds the PIN; replay takes it from `vars` / `--var`.
-- **Suites** (`droidreplay run` only): several targets, and a folder stands for the `.yaml` files
+- **Suites** (`moreplay run` only): several targets, and a folder stands for the `.yaml` files
   directly in it, sorted by name (subfolders hold subflows). A flow's `tags: [...]` meet
   `--include-tags` (any of them) and `--exclude-tags` (none of them). Flows run one after
   another on one agent; a flow that cannot start (a missing `${var}`) fails and the rest still
@@ -239,7 +239,7 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
 - **Failure artifacts**: when a step fails, `runFlow` saves `failed-step-N.jpg` and
   `failed-step-N.txt` (the observe output) in the run's evidence folder and lists them in its
   text and `FlowRun.artifacts`; a device that is gone just skips them. Maestro header `tags` map to flow `tags` both ways.
-- **Replay** (`flow run`, or `droidreplay run` with no model): `${var}` substitution (missing
+- **Replay** (`flow run`, or `moreplay run` with no model): `${var}` substitution (missing
   vars fail before anything runs), `wait: 5000` on targeted steps and `timeout: 5000` on
   wait_for/wait_gone, then one `executeSteps`. Screenshot steps first wait for the screen to
   settle (tree unchanged 400 ms). Evidence goes to `<evidence>/<flow>/<YYYYMMDD-HHMMSS>/`.
@@ -273,12 +273,12 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
 
 ## Maestro export/import (src/maestro.ts)
 
-`droidreplay export <flow> [--app-id pkg] [--out file]` and `droidreplay import <file>
+`moreplay export <flow> [--app-id pkg] [--out file]` and `moreplay import <file>
 [--name n]`. CLI only, so the MCP tool budget stays the same. Steps with no counterpart are
 left out and listed on stderr (`skipped`), never dropped silently. `${var}` passes through both
 ways (Maestro reads it from `-e var=...`).
 
-| droidreplay | Maestro |
+| moreplay | Maestro |
 |---|---|
 | launch / stop_app / clear_app | `launchApp` / `stopApp` / `clearState` (bare when the package is the header's `appId`, which defaults to the first launched package). Import turns `launchApp: {clearState: true}` into clear_app + launch |
 | text everywhere | Maestro reads text as a regex: import wraps text using regex characters other than `.` in `/.../`; export writes `/re/` as `re` and escapes plain text. `${var}` is left alone both ways |
@@ -297,5 +297,5 @@ ways (Maestro reads it from `-e var=...`).
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
 selector keys `width` / `height` / `tolerance`, `traits`, `containsDescendants`, other `launchApp` options (`stopApp: false`, ...),
 scripts, `when: {platform}` (import). observe/apps/windows export to nothing.
-Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
+Maestro matches `text` as a regex, moreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

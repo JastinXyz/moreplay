@@ -84,7 +84,7 @@ test("replays wait for elements, and coordinate taps for the screen to settle", 
 });
 
 test("runFlow passes, batches agent steps and saves evidence per run", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const d = fakeDevice();
     const flow = { name: "login", steps: [{ launch: "com.app" }, { tap: "Masuk" }, { type: { field: "Email", value: "${email}" } }, { screenshot: "done" }] };
@@ -120,7 +120,7 @@ test("patch replaces or deletes one step", () => {
 });
 
 test("flows save to and load from YAML files", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const path = await saveFlow(dir, { name: "login ok", steps: [{ tap: "Masuk" }] });
     assert.equal(path, join(dir, "login-ok.yaml"));
@@ -134,7 +134,7 @@ test("flows save to and load from YAML files", async () => {
 });
 
 test("flows save to and load from a path outside the flows folder", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const target = join(dir, "scratch", "login.yaml");
     const path = await saveFlow(join(dir, "flows"), { name: "login", steps: [{ tap: "Masuk" }] }, target);
@@ -174,7 +174,7 @@ test("a flow's dismiss list goes to every step that waits for an element", async
 });
 
 test("runFlow hands each step result over as it finishes", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const seen = [];
     const flow = { name: "live", steps: [{ launch: "com.app" }, { tap: "A" }, { tap: "B" }, { screenshot: "end" }] };
@@ -234,7 +234,7 @@ test("run_flow: when gates an inline block, checked once without waiting", async
 });
 
 test("run_flow: a file next to the flow, its vars on top of the caller's, and inner failures named", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     await mkdir(join(dir, "shared"));
     await writeFile(join(dir, "shared", "pin.yaml"), 'name: pin\nsteps:\n  - tap: {text: "${PIN}", below: "${PROMPT}"}\n  - tap: "${PIN}x"\n');
@@ -282,7 +282,7 @@ test("repeat: times, while checked before each round, a cap for while alone, inn
 });
 
 test("a folder runs its top-level .yaml files by name; tags pick among them", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     await mkdir(join(dir, "suite", "shared"), { recursive: true });
     for (const f of ["b-login.yaml", "a-open.yml", "notes.txt", "shared/pin.yaml"]) await writeFile(join(dir, "suite", f), "name: x\nsteps: []\n");
@@ -306,7 +306,7 @@ test("a folder runs its top-level .yaml files by name; tags pick among them", as
 });
 
 test("a failed flow saves a screenshot and the screen as text next to its evidence", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   try {
     const d = fakeDevice((s) => (s.text === "B" ? { ok: false, error: "not found" } : { ok: true, out: "done" }));
     const run = await runFlow(d, { name: "art", steps: [{ tap: "A" }, { tap: "B" }] }, { evidenceDir: dir });

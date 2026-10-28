@@ -23,14 +23,14 @@ Status as of the latest merged PR. Move items to Done when they land.
 ## Then: the differentiator
 
 - [x] Recorder: successful `act` steps recorded with selectors (not coordinates)
-- [x] `replay` of a saved flow without a model (`flow run`, `droidreplay run`), evidence per run
+- [x] `replay` of a saved flow without a model (`flow run`, `moreplay run`), evidence per run
 - [x] Self-heal: on a broken step, return the step + screen so the model can patch the flow
-- [x] Maestro YAML export/import (`droidreplay export` / `import`, CLI only)
+- [x] Maestro YAML export/import (`moreplay export` / `import`, CLI only)
 
-## Maestro parity: real suites as droidreplay flows
+## Maestro parity: real suites as moreplay flows
 
 What it takes for a team's existing Maestro suite (logins with a PIN keypad, sessions that may
-or may not be kept, dev-build overlays) to be imported or recorded and replayed by droidreplay.
+or may not be kept, dev-build overlays) to be imported or recorded and replayed by moreplay.
 
 - [x] Secrets stay out of recorded flows: `flow record{vars}`, values saved back as `${var}`
 - [x] `clear_app` (Maestro `clearState`) to start from a fresh install state
@@ -59,7 +59,7 @@ After launch:
 - [ ] Screen recording as evidence; double tap, drag, pinch
 - [ ] Orientation, location mocking, clipboard, dark mode
 - [ ] Several devices: `--device` per run, sharding a suite across devices
-- [ ] One-command setup for MCP clients (`npx droidreplay install claude`)
+- [ ] One-command setup for MCP clients (`npx moreplay install claude`)
 - [ ] WebView DOM over CDP for debuggable WebViews
 - [ ] `act` returning only what changed on screen, to save tokens
 

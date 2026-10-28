@@ -1,0 +1,7 @@
+name: my-device
+steps:
+  - launch: com.android.settings
+  - tap: Perangkat saya
+  - screenshot: my-device
+  - key: back
+  - wait_for: Perangkat saya
