@@ -47,7 +47,7 @@ export async function startServer(): Promise<void> {
         "launch{package, args?:{k: v}}, stop_app{package}, clear_app{package} (wipes data), install_app{path, grant?}, uninstall_app{package},",
         "open_link{url, package?}, permissions{package, grant?:[CAMERA..]|'all', revoke?}, logs{package?, level?=W, since?=60s, lines?=50}, apps{filter?}, screenshot{name} (name or path; saved, not shown), observe, hide_keyboard,",
         "repeat{times? | while?:{visible|notVisible: target}, steps},",
-        "run_flow{file? | steps?, vars?, when?:{visible|notVisible: target}}: subflow (file relative to the flow), skipped if when fails.",
+        "run_flow{file? | steps?, vars?, when?:{visible|notVisible: target | true: '${!!X}'}}: subflow (file relative to the flow), skipped if when fails.",
       ].join("\n"),
       inputSchema: {
         steps: z.array(z.object({ op: z.string() }).passthrough()).min(1),

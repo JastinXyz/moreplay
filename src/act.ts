@@ -61,9 +61,11 @@ const MAX_DEPTH = 8;
 /** `when: {visible: target}` or `{notVisible: target}`, checked once on the current screen. */
 async function conditionMet(device: ActDevice, when: unknown): Promise<boolean> {
   const w = (when ?? {}) as Record<string, unknown>;
+  // {true: "${!!CARD}"}: decided by the vars alone, after substitution.
+  if ("true" in w) return String(w.true).trim() === "true";
   const gone = "notVisible" in w;
   const t = gone ? w.notVisible : w.visible;
-  if (t === undefined) throw new Error("when needs visible or notVisible");
+  if (t === undefined) throw new Error("when needs visible, notVisible or true");
   const sel = t && typeof t === "object" ? t : { text: String(t) };
   const r = (await device.run([{ op: gone ? "wait_gone" : "wait_for", ...sel, timeout: 0 }])).results[0];
   // Not met is a timeout; anything else (a bad regex, a bad anchor) is a real error.

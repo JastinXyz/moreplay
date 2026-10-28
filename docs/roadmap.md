@@ -63,7 +63,8 @@ After launch:
 - [ ] WebView DOM over CDP for debuggable WebViews
 - [ ] `act` returning only what changed on screen, to save tokens
 
-Not planned for now: iOS, JavaScript in flows (`evalScript`, `${expr}`), AI assertions, cloud
+Not planned for now: iOS, full JavaScript in flows (`evalScript`, `${...}` beyond `NAME`, `NAME[n]`,
+`!!NAME` and `==`/`!=`), AI assertions, cloud
 devices, a screenshot-only (vision) mode for apps with no accessibility tree.
 
 ## Quality

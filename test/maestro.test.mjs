@@ -242,14 +242,16 @@ test("runFlow maps to run_flow both ways: file, env, when and inline commands", 
     { run_flow: { file: "shared/keypad-pin.yaml" } },
     { run_flow: { file: "shared/keypad-pin.yaml", vars: { PIN: "${PIN}", PROMPT: "Enter your PIN" } } },
     { run_flow: { when: { visible: "Dismiss" }, steps: [{ tap: "Dismiss" }, { key: "back" }] } },
+    { run_flow: { when: { true: "${CLEAR == 'true'}" }, steps: [{ clear_app: "com.app" }] } },
   ]);
-  assert.match(skipped[0], /command 4: .*runFlow when true/);
-  assert.match(skipped[1], /command 5: .*commands 2: evalScript/);
+  assert.equal(skipped.length, 1);
+  assert.match(skipped[0], /command 5: .*commands 2: evalScript/);
   const [, cmds] = commands(toMaestro(out, "com.app").out);
   assert.deepEqual(cmds, [
     { runFlow: "shared/keypad-pin.yaml" },
     { runFlow: { file: "shared/keypad-pin.yaml", env: { PIN: "${PIN}", PROMPT: "Enter your PIN" } } },
     { runFlow: { when: { visible: { text: "Dismiss" } }, commands: [{ tapOn: "Dismiss" }, "back"] } },
+    { runFlow: { when: { true: "${CLEAR == 'true'}" }, commands: ["clearState"] } },
   ]);
 });
 
@@ -369,4 +371,9 @@ test("percent points, states and childOf/containsChild map both ways", () => {
     { tapOn: { containsChild: "Settings" } },
     { extendedWaitUntil: { visible: { text: "Pay", childOf: { id: "checkout_sheet" } } } },
   ]);
+});
+
+test("Maestro ${NAME[n]} placeholders stay placeholders, not regex", () => {
+  const { out } = fromMaestro("appId: com.app\n---\n- tapOn:\n    text: ${PIN[0]}\n    below: ${PROMPT}\n");
+  assert.deepEqual(out.steps, [{ tap: { text: "${PIN[0]}", below: "${PROMPT}" } }]);
 });
