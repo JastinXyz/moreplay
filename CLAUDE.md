@@ -132,6 +132,10 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
   call it the end. The agent waits for the tree to change first (`waitChange`).
 - While a popup/dialog is modal, `getWindows()` returns only it; the activity behind is
   genuinely not reported. Use the `windows` debug op to see what the system lists.
+- "Covers" means drawn later, not listed later: `drawRank()` sorts siblings by
+  `getDrawingOrder()`. React Native's zIndex reorders drawing only, so a PIN lock listed before
+  the home it sits on was hidden from observe, and a tap on a home menu item behind it typed a PIN
+  digit. Every cover check (`coveredScreens`, `visibleRect`, `walk`) must use the rank.
 - React Navigation keeps earlier screens mounted as full-size siblings and they still report
   `isVisibleToUser`. `coveredScreens` in `Device.java` skips earlier siblings whose content
   mostly lies under the content of a later one that fills the parent; every traversal

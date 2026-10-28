@@ -5,6 +5,12 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- Screens raised with zIndex (React Native) are read in their real stacking order. A PIN lock
+  over the home screen was hidden from `observe` and from selectors, so a tap meant for the home
+  behind it landed on the lock's keypad.
+- `type` fails at once when the field stays empty (it refused the characters), instead of the
+  flow failing a minute later on an unrelated wait.
+
 - `moreplay run` prints the steps inside `run_flow` and `repeat` as they finish (indented), and
   `… still running (N s ...)` when nothing has printed for 15 s. A whole subflow used to be one
   silent line, which looked like a hang during a long wait.
