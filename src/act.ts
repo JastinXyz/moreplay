@@ -18,6 +18,8 @@ export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "scr
 const SETTLE_MS = 400;
 
 const TARGETED = new Set(["tap", "long_press", "type"]);
+/** Position keys of a target (the agent's `Device.RELATIVE`): below/above/leftOf/rightOf another target. */
+export const RELATIVE_KEYS = ["below", "above", "leftOf", "rightOf"];
 // A step that opens a sheet or a screen returns before its content is in the tree, so the
 // next tap in the same batch would miss it.
 const ACT_WAIT_MS = 3000;
@@ -25,7 +27,7 @@ const ACT_WAIT_MS = 3000;
 /** Lets every selector-targeted step after the first wait briefly for its element. */
 export function withActWaits(steps: Step[]): Step[] {
   return steps.map((s, i) =>
-    i > 0 && TARGETED.has(s.op) && !("wait" in s) && ["text", "id", "desc", "field"].some((k) => k in s) ? { ...s, wait: ACT_WAIT_MS } : s,
+    i > 0 && TARGETED.has(s.op) && !("wait" in s) && ["text", "id", "desc", "field", ...RELATIVE_KEYS].some((k) => k in s) ? { ...s, wait: ACT_WAIT_MS } : s,
   );
 }
 

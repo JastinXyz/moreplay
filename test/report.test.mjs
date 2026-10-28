@@ -13,6 +13,8 @@ test("steps are labelled from the flow as written", () => {
     [{ op: "scroll", dir: "down", until: { text: "Logout" } }, 'scroll down until "Logout"'],
     [{ op: "wait_for", text: "42" }, 'wait_for "42"'],
     [{ op: "key", key: "back" }, "key back"],
+    [{ op: "tap", text: "1", below: "Enter your PIN" }, 'tap "1" below "Enter your PIN"'],
+    [{ op: "tap", above: "Finance", leftOf: { id: "menu_more" } }, 'tap above "Finance" leftOf #menu_more'],
     [{ op: "screenshot", name: "home" }, "screenshot home"],
   ]) assert.equal(describeStep(step), label);
 });
