@@ -7,7 +7,7 @@ Usage:
   droidreplay            run the MCP server on stdio (what MCP clients start)
   droidreplay doctor     check adb, the device and the agent, then exit
   droidreplay run <flow|folder>... [--var key=value]... [--evidence dir]
-                  [--include-tags a,b] [--exclude-tags c]
+                  [--include-tags a,b] [--exclude-tags c] [--junit report.xml]
                          replay flows (names in .droidreplay/flows, .yaml paths, or every
                          .yaml in a folder) without a model; exit 0 when all pass, 1 otherwise
   droidreplay export <flow> [--app-id package] [--out file]

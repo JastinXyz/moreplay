@@ -73,3 +73,28 @@ test("suite summary: totals, skipped by tags, and the flows that failed", async 
   );
   assert.equal(suiteSummary([{ name: "a.yaml", ok: true }, { name: "c.yaml", ok: true }], 0, "2.0", false), "\nPASS  2 flows: 2 passed in 2.0 s");
 });
+
+test("JUnit XML: a testcase per flow, failures with step, crash and artifacts, skipped by tags, escaped", async () => {
+  const { junitXml } = await import("../dist/report.js");
+  const out = junitXml(
+    [
+      { file: "flows/a.yaml", name: "open", ok: true, secs: 1.2 },
+      {
+        file: "flows/b.yaml",
+        name: "login <ok>",
+        ok: false,
+        secs: 5.5,
+        failedStep: 3,
+        error: 'not found: text="Home"',
+        crash: "app crashed: FATAL EXCEPTION: main",
+        artifacts: ["ev/failed-step-3.jpg", "ev/failed-step-3.txt"],
+      },
+    ],
+    [{ file: "flows/c.yaml", name: "slow" }],
+    6.7,
+  );
+  assert.match(out, /^<\?xml version="1.0" encoding="UTF-8"\?>\n<testsuites tests="3" failures="1" skipped="1" time="6.700">/);
+  assert.match(out, /<testcase classname="flows\/a.yaml" name="open" time="1.200"\/>/);
+  assert.match(out, /<testcase classname="flows\/b.yaml" name="login &lt;ok&gt;" time="5.500">\n    <failure message="step 3: not found: text=&quot;Home&quot;">not found: text=&quot;Home&quot;\napp crashed: FATAL EXCEPTION: main\nartifacts: ev\/failed-step-3.jpg, ev\/failed-step-3.txt<\/failure>/);
+  assert.match(out, /<testcase classname="flows\/c.yaml" name="slow" time="0"><skipped message="excluded by tags"\/><\/testcase>/);
+});

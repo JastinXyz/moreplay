@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { executeSteps, RELATIVE_KEYS, screen, type ActDevice, type Step, type Subflows } from "./act.js";
+import { executeSteps, RELATIVE_KEYS, saveScreenshot, screen, type ActDevice, type Step, type Subflows } from "./act.js";
 import type { StepResult } from "./device.js";
 
 /**
@@ -245,6 +245,10 @@ export interface FlowRun {
   failedStep?: number;
   /** The app's crash, when a step failed because it died. */
   crash?: string;
+  /** The failed step's error. */
+  error?: string;
+  /** Files saved when a step failed: a screenshot and the screen as text. */
+  artifacts?: string[];
 }
 
 export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOptions): Promise<FlowRun> {
@@ -257,7 +261,8 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
   const subflows: Subflows = { load: loadSubflow, prepare, vars: opts.vars ?? {}, dir: opts.dir ?? process.cwd() };
   const exec = await executeSteps(device, steps, evidenceDir, opts.onStep && ((r, i) => opts.onStep!(i, r)), subflows);
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  const shots = exec.outcomes.some((o) => o.step.op === "screenshot" && o.result.ok);
+  let shots = exec.outcomes.some((o) => o.step.op === "screenshot" && o.result.ok);
+  let artifacts: string[] = [];
   const lines = exec.lines.map((l, i) => `${i + 1}. ${l}`);
   const tail: string[] = [];
   const done = (ok: boolean, failedStep?: number): FlowRun => ({
@@ -268,6 +273,8 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
     secs,
     ...(failedStep ? { failedStep } : {}),
     ...(exec.crash ? { crash: exec.crash } : {}),
+    ...(exec.failedAt !== undefined ? { error: exec.outcomes[exec.failedAt].result.error ?? "" } : {}),
+    ...(artifacts.length ? { artifacts } : {}),
   });
 
   if (exec.failedAt === undefined) {
@@ -278,8 +285,21 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
   tail.push(
     `✗ flow ${flow.name} failed at step ${n}/${steps.length} after ${secs}s: ${stringify(flow.steps[exec.failedAt], { lineWidth: 0 }).trim()}`,
   );
+  // What the screen looked like when it broke, kept next to the run's other evidence.
+  let scr = "";
+  try {
+    scr = await screen(device);
+    await mkdir(evidenceDir, { recursive: true });
+    const txt = join(evidenceDir, `failed-step-${n}.txt`);
+    await writeFile(txt, scr);
+    artifacts = [await saveScreenshot(device, evidenceDir, `failed-step-${n}`), txt];
+    shots = true;
+    tail.push(`failure artifacts: ${artifacts.join(", ")}`);
+  } catch {
+    // The device may be gone (that can be why the step failed); the failure itself still reports.
+  }
   if (opts.screenOnFailure) {
-    tail.push("--- screen", await screen(device));
+    tail.push("--- screen", scr);
     tail.push(`Fix it with flow {action: "patch", name: "${flow.name}", index: ${n}, steps: [...]}, then run again.`);
   }
   return done(false, n);

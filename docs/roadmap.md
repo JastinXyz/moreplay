@@ -50,7 +50,7 @@ What users of those tools reach for or complain about. Before launch:
       runs an app_process server with one UiAutomation, so the old 2.2-3.3 s figure may be stale
 - [x] `install_app` / uninstall, `open_link` (deep links), runtime permissions, launch arguments
 - [x] Logcat filtered by package/level and capped for tokens; attach a crash when the app died mid-step
-- [ ] `run --junit report.xml`, and a screenshot + screen dump saved automatically for a failed step
+- [x] `run --junit report.xml`, and a screenshot + screen dump saved automatically for a failed step
 - [ ] Percent points (`x: "50%"`) and percent swipes, so flows survive other screen sizes
 - [ ] State selectors `enabled` / `checked` / `selected` / `focused`, plus `childOf` / `containsChild`
 

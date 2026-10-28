@@ -143,8 +143,12 @@ A folder runs as a suite: every `.yaml` directly in it, by name (subfolders such
 hold subflows and are not run on their own). Tag flows with `tags: [smoke]` to pick some:
 
 ```bash
-npx droidreplay run e2e/mobile --include-tags smoke --var pin=$PIN
+npx droidreplay run e2e/mobile --include-tags smoke --var pin=$PIN --junit reports/mobile.xml
 ```
+
+`--junit` writes a report CI systems read (GitHub Actions, GitLab, Jenkins). When a step fails,
+a screenshot and the screen as text are saved next to the run's evidence (`failed-step-N.jpg`,
+`failed-step-N.txt`), and the report points at them.
 
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.

@@ -158,3 +158,46 @@ export class Reporter {
     return lines.join("\n");
   }
 }
+
+export interface FlowReport {
+  /** Flow file as shown to the user (relative path). */
+  file: string;
+  name: string;
+  ok: boolean;
+  secs: number;
+  failedStep?: number;
+  error?: string;
+  crash?: string;
+  artifacts?: string[];
+}
+
+const xml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+
+/**
+ * JUnit XML for CI (GitHub Actions, GitLab, Jenkins read it): one testcase per flow, a
+ * `<failure>` with the step, its error, the crash and the failure artifacts, `<skipped>` for
+ * flows left out by tags.
+ */
+export function junitXml(results: FlowReport[], skipped: { file: string; name: string }[], secs: number): string {
+  const failures = results.filter((r) => !r.ok).length;
+  const cases = results.map((r) => {
+    const open = `  <testcase classname="${xml(r.file)}" name="${xml(r.name)}" time="${r.secs.toFixed(3)}"`;
+    if (r.ok) return `${open}/>`;
+    const message = r.failedStep ? `step ${r.failedStep}: ${(r.error ?? "").split("\n")[0]}` : (r.error ?? "failed").split("\n")[0];
+    const body = [r.error, r.crash && !r.error?.includes(r.crash) ? r.crash : "", r.artifacts?.length ? `artifacts: ${r.artifacts.join(", ")}` : ""]
+      .filter(Boolean)
+      .join("\n");
+    return `${open}>\n    <failure message="${xml(message)}">${xml(body)}</failure>\n  </testcase>`;
+  });
+  for (const s of skipped) cases.push(`  <testcase classname="${xml(s.file)}" name="${xml(s.name)}" time="0"><skipped message="excluded by tags"/></testcase>`);
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<testsuites tests="${results.length + skipped.length}" failures="${failures}" skipped="${skipped.length}" time="${secs.toFixed(3)}">`,
+    `<testsuite name="droidreplay" tests="${results.length + skipped.length}" failures="${failures}" skipped="${skipped.length}" time="${secs.toFixed(3)}">`,
+    ...cases,
+    `</testsuite>`,
+    `</testsuites>`,
+    "",
+  ].join("\n");
+}
