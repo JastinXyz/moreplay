@@ -16,7 +16,7 @@ export type Step = { op: string } & Record<string, unknown>;
 
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
 export const HOST_OPS = new Set([
-  "launch", "stop_app", "clear_app", "install_app", "uninstall_app", "open_link", "permissions", "apps", "screenshot", "run_flow", "repeat",
+  "launch", "stop_app", "clear_app", "install_app", "uninstall_app", "open_link", "permissions", "logs", "apps", "screenshot", "run_flow", "repeat",
 ]);
 
 // How long the tree must stay unchanged before a screenshot step captures it.
@@ -131,6 +131,8 @@ export interface Execution {
   outcomes: Outcome[];
   /** Index into the input steps of the step that failed, if any. */
   failedAt?: number;
+  /** When a step failed because the app crashed: the exception and its top frames. */
+  crash?: string;
 }
 
 /**
@@ -146,6 +148,7 @@ export async function executeSteps(
   subflows?: Subflows,
 ): Promise<Execution> {
   const lines: string[] = [];
+  const t0 = Date.now();
   let emitted = 0;
   const emit = onStep && ((r: StepResult) => onStep(r, emitted++));
   const outcomes: Outcome[] = [];
@@ -193,7 +196,16 @@ export async function executeSteps(
     if (!result.ok) failedAt = outcomes.length - 1;
   }
   await flush();
-  return { lines, outcomes, failedAt };
+  // A step that fails because the app died says so; checked only on failure, at the top level.
+  let crash: string | undefined;
+  if (failedAt !== undefined && !(subflows?.depth ?? 0)) {
+    crash = await recentCrash(device, Math.ceil((Date.now() - t0) / 1000) + 2);
+    if (crash) {
+      outcomes[failedAt].result.error = `${outcomes[failedAt].result.error ?? ""}\n${crash}`;
+      lines[failedAt] = fmt(outcomes[failedAt].result);
+    }
+  }
+  return { lines, outcomes, failedAt, crash };
 }
 
 /** The `act` tool: executeSteps, then the screen afterwards unless told not to. */
@@ -226,6 +238,81 @@ function packageOf(step: Step): string {
   if (!pkg) throw new Error(`${step.op} needs package`);
   if (!PACKAGE_RE.test(pkg)) throw new Error(`invalid package name: ${pkg}`);
   return pkg;
+}
+
+// Log lines are long and repetitive; these keep a `logs` answer to a few hundred tokens.
+const LOG_LINE_MAX = 240;
+const LOG_LINES_MAX = 500;
+
+/** "90", "30s", "2m", "1h" -> seconds. */
+function seconds(v: unknown): number {
+  const m = /^(\d+)\s*([smh]?)$/.exec(String(v).trim());
+  if (!m) throw new Error(`since must look like 30s, 2m or 1h, got: ${v}`);
+  return Number(m[1]) * (m[2] === "h" ? 3600 : m[2] === "m" ? 60 : 1);
+}
+
+/** Trims long lines and folds repeats into one line with a count. */
+function squeeze(raw: string, max: number): string[] {
+  const out: string[] = [];
+  let last = "";
+  let count = 0;
+  const flush = () => {
+    if (count) out.push(count > 1 ? `${last} (x${count})` : last);
+  };
+  for (const line of raw.split("\n")) {
+    const l = line.trimEnd();
+    if (!l || l.startsWith("--------- beginning of")) continue;
+    const cut = l.length > LOG_LINE_MAX ? `${l.slice(0, LOG_LINE_MAX)}…` : l;
+    if (cut === last) count++;
+    else {
+      flush();
+      last = cut;
+      count = 1;
+    }
+  }
+  flush();
+  return out.slice(-max);
+}
+
+/** logs{package?, level?=W, since?=60s, lines?=50}: recent logcat, one app's when it runs. */
+async function logs(device: ActDevice, step: Step): Promise<string> {
+  const level = String(step.level ?? "W").toUpperCase().slice(0, 1);
+  if (!"VDIWEF".includes(level) || !level) throw new Error(`level must be one of V D I W E F, got: ${step.level}`);
+  const since = seconds(step.since ?? "60s");
+  const max = Math.min(Math.max(Number(step.lines ?? 50) || 50, 1), LOG_LINES_MAX);
+  const from = `-T "$(($(date +%s)-${since})).000"`;
+  let what = "all apps";
+  let cmd = `logcat -d -v brief ${from} '*:${level}'`;
+  if (step.package !== undefined) {
+    const pkg = packageOf(step);
+    const pid = (await device.shell(`pidof ${pkg}; true`)).trim().split(/\s+/)[0];
+    if (/^\d+$/.test(pid)) {
+      what = pkg;
+      cmd = `logcat -d -v brief ${from} --pid=${pid} '*:${level}'`;
+    } else {
+      // Not running: what usually matters then is how it died.
+      what = `${pkg} (not running; crash buffer)`;
+      cmd = `logcat -d -b crash -v brief ${from}`;
+    }
+  }
+  const lines = squeeze(await device.shell(`${cmd} 2>&1 | tail -n ${max * 4}`), max);
+  return `${what}, level ${level}+, last ${since}s: ${lines.length ? `${lines.length} line(s)\n${lines.join("\n")}` : "nothing"}`;
+}
+
+/** The newest crash in the last `secs` seconds: process, exception and top frames, or undefined. */
+async function recentCrash(device: ActDevice, secs: number): Promise<string | undefined> {
+  try {
+    const raw = await device.shell(`logcat -d -b crash -v brief -T "$(($(date +%s)-${secs})).000" 2>/dev/null | tail -n 60`);
+    const lines = raw.split("\n").map((l) => l.replace(/^[EF]\/AndroidRuntime\(\s*\d+\):\s?/, "").trimEnd()).filter(Boolean);
+    const start = lines.map((l) => /FATAL EXCEPTION/.test(l)).lastIndexOf(true);
+    if (start < 0) return undefined;
+    const block = lines.slice(start);
+    const head = block.filter((l) => !/^\s*at /.test(l)).slice(0, 3);
+    const frames = block.filter((l) => /^\s*at /.test(l)).slice(0, 4).map((l) => `  ${l.trim()}`);
+    return `app crashed: ${[...head, ...frames].join("\n")}`;
+  } catch {
+    return undefined; // never hide the step's own error behind a failed crash lookup
+  }
 }
 
 /** Single-quotes a value for `adb shell`. */
@@ -317,6 +404,8 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
     }
     case "permissions":
       return permissions(device, step);
+    case "logs":
+      return logs(device, step);
     case "stop_app": {
       const pkg = packageOf(step);
       await device.shell(`am force-stop ${pkg}`);

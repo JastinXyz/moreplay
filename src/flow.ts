@@ -243,6 +243,8 @@ export interface FlowRun {
   secs: string;
   /** 1-based step number that failed. */
   failedStep?: number;
+  /** The app's crash, when a step failed because it died. */
+  crash?: string;
 }
 
 export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOptions): Promise<FlowRun> {
@@ -265,6 +267,7 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
     shots,
     secs,
     ...(failedStep ? { failedStep } : {}),
+    ...(exec.crash ? { crash: exec.crash } : {}),
   });
 
   if (exec.failedAt === undefined) {

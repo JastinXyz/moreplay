@@ -38,6 +38,8 @@ function target(s: Record<string, unknown>): string {
 export function describeStep(s: Step): string {
   const t = target(s);
   switch (s.op) {
+    case "logs":
+      return `logs ${s.package ?? "all"}${s.level ? ` ${String(s.level).toUpperCase()}+` : ""}`;
     case "install_app":
       return `install_app ${s.path}`;
     case "open_link":

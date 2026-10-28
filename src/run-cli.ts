@@ -77,6 +77,8 @@ export async function runCli(args: string[]): Promise<number> {
       console.log(rep.header(near(path)));
       try {
         const result = await runFlow(device, flow, { vars, evidenceDir, dir: dirname(path), onStep: (i, r) => console.log(rep.step(i, r)) });
+        // Step lines print as they arrive, before a crash is known; show it once the flow stops.
+        if (result.crash) console.log(result.crash.split("\n").map((l) => `      ${l}`).join("\n"));
         if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
         const evidence = result.shots ? near(result.evidenceDir) : undefined;
         console.log(rep.footer(result.ok, result.secs, { failedStep: result.failedStep, evidence }));
