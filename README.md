@@ -160,7 +160,7 @@ What your AI app gets:
 | Tool | What it does |
 |---|---|
 | `observe` | Reads the screen as text, one line per button, text or field. |
-| `act` | Runs a list of steps in one go: tap, type, scroll, wait, press a key, open an app, take a screenshot. Stops at the first step that fails and shows the screen. |
+| `act` | Runs a list of steps in one go: tap, type, scroll, wait, press a key, open an app or wipe its data, take a screenshot. Stops at the first step that fails and shows the screen. |
 | `screenshot` | Saves a picture of the screen. The AI only looks at it when it asks to. |
 | `flow` | Records steps, saves them as a flow, runs a saved flow, and fixes a broken step. |
 

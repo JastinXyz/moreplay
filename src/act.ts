@@ -12,7 +12,7 @@ export interface ActDevice {
 export type Step = { op: string } & Record<string, unknown>;
 
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
-export const HOST_OPS = new Set(["launch", "stop_app", "apps", "screenshot"]);
+export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot"]);
 
 // How long the tree must stay unchanged before a screenshot step captures it.
 const SETTLE_MS = 400;
@@ -151,6 +151,13 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
       const pkg = packageOf(step);
       await device.shell(`am force-stop ${pkg}`);
       return `stopped ${pkg}`;
+    }
+    case "clear_app": {
+      // Like a fresh install: data, cache and runtime permissions go, the app is stopped.
+      const pkg = packageOf(step);
+      const out = (await device.shell(`pm clear ${pkg}`)).trim();
+      if (out !== "Success") throw new Error(`pm clear ${pkg}: ${out || "no answer"}`);
+      return `cleared ${pkg}`;
     }
     case "apps": {
       const filter = String(step.filter ?? "").toLowerCase();

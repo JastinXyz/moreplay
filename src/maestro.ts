@@ -53,6 +53,8 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
       return [s.package === appId ? "launchApp" : { launchApp: { appId: s.package } }];
     case "stop_app":
       return [s.package === appId ? "stopApp" : { stopApp: s.package }];
+    case "clear_app":
+      return [s.package === appId ? "clearState" : { clearState: s.package }];
     case "tap":
       return targeted("tapOn");
     case "long_press":
@@ -106,7 +108,7 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
 /** A flow as a Maestro file. appId defaults to the first launched or stopped package. */
 export function toMaestro(flow: FlowFile, appId?: string): Converted<string> {
   const steps = flow.steps.map(fromCompact);
-  const app = appId ?? (steps.find((s) => s.op === "launch" || s.op === "stop_app")?.package as string | undefined);
+  const app = appId ?? (steps.find((s) => s.op === "launch" || s.op === "stop_app" || s.op === "clear_app")?.package as string | undefined);
   if (!app) throw new Error("the flow launches no app, so Maestro's appId is unknown (pass --app-id)");
   const skipped: string[] = [];
   if (flow.dismiss?.length) skipped.push(`dismiss ${brief(flow.dismiss)} (Maestro has none; add optional taps where it shows up)`);
@@ -155,10 +157,13 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
   };
   switch (name) {
     case "launchApp": {
-      const extra = Object.keys(obj).filter((k) => k !== "appId");
+      const extra = Object.keys(obj).filter((k) => k !== "appId" && k !== "clearState");
       if (extra.length) throw new Error(`launchApp ${extra.join(", ")}`);
-      return [{ op: "launch", package: app(arg) }];
+      const pkg = app(arg);
+      return [...(obj.clearState === true ? [{ op: "clear_app", package: pkg }] : []), { op: "launch", package: pkg }];
     }
+    case "clearState":
+      return [{ op: "clear_app", package: app(arg) }];
     case "stopApp":
       return [{ op: "stop_app", package: app(arg) }];
     case "tapOn":
