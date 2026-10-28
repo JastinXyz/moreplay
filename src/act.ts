@@ -155,7 +155,11 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
     case "clear_app": {
       // Like a fresh install: data, cache and runtime permissions go, the app is stopped.
       const pkg = packageOf(step);
-      const out = (await device.shell(`pm clear ${pkg}`)).trim();
+      // pm exits non-zero on failure; keep its answer ("Failed"), not adb's command line.
+      const out = await device.shell(`pm clear ${pkg}`).then(
+        (o) => o.trim(),
+        (e: Error) => e.message.trim().split("\n").pop() ?? "",
+      );
       if (out !== "Success") throw new Error(`pm clear ${pkg}: ${out || "no answer"}`);
       return `cleared ${pkg}`;
     }

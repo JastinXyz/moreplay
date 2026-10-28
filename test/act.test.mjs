@@ -140,6 +140,11 @@ test("clear_app wipes the app with pm clear and fails loudly when it cannot", as
   assert.match(await runAct(denied, [{ op: "clear_app", package: "com.app" }, { op: "tap", text: "A" }], opts), /✗ clear_app \d+ms pm clear com\.app: Failed$/);
   assert.deepEqual(denied.calls, [{ shell: "pm clear com.app" }]); // stopped there
 
+  // pm exits non-zero for an unknown package; the error keeps pm's answer, not adb's command line.
+  const missing = fakeDevice();
+  missing.shell = async () => { throw new Error("Command failed: adb -s X shell pm clear com.app\nFailed"); };
+  assert.match(await runAct(missing, [{ op: "clear_app", package: "com.app" }], opts), /✗ clear_app \d+ms pm clear com\.app: Failed$/);
+
   const bad = fakeDevice();
   assert.match(await runAct(bad, [{ op: "clear_app", package: "com.app; rm -rf /" }], opts), /invalid package name/);
   assert.deepEqual(bad.calls, []);
