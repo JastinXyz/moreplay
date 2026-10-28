@@ -23,6 +23,7 @@ export interface FlowFile {
 const SHORT_KEY: Record<string, string> = {
   launch: "package",
   stop_app: "package",
+  clear_app: "package",
   key: "key",
   screenshot: "name",
   sleep: "ms",

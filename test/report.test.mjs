@@ -5,6 +5,7 @@ import { describeStep, Reporter } from "../dist/report.js";
 test("steps are labelled from the flow as written", () => {
   for (const [step, label] of [
     [{ op: "launch", package: "com.app" }, "launch com.app"],
+    [{ op: "clear_app", package: "com.app" }, "clear_app com.app"],
     [{ op: "tap", text: "Sign in" }, 'tap "Sign in"'],
     [{ op: "tap", id: "btn_ok" }, "tap #btn_ok"],
     [{ op: "tap", x: 10, y: 20 }, "tap 10,20"],

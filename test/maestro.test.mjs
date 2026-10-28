@@ -149,3 +149,11 @@ test("import and export CLIs", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("clear_app maps to clearState, and launchApp clearState to clear_app + launch", () => {
+  const [, cmds] = commands(toMaestro({ name: "x", steps: [{ clear_app: "com.app" }, { launch: "com.app" }, { clear_app: "com.other" }] }).out);
+  assert.deepEqual(cmds, ["clearState", "launchApp", { clearState: "com.other" }]);
+  const { out, skipped } = fromMaestro("appId: com.app\n---\n- launchApp:\n    clearState: true\n- clearState\n- clearState: com.other\n");
+  assert.deepEqual(out.steps, [{ clear_app: "com.app" }, { launch: "com.app" }, { clear_app: "com.app" }, { clear_app: "com.other" }]);
+  assert.deepEqual(skipped, []);
+});

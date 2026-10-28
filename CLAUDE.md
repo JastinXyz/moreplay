@@ -37,7 +37,7 @@ digging through git history. If a doc says something the code no longer does, fi
     returned in `skipped`. `maestro-cli.ts`: `droidreplay export` / `import`.
   - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
     start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
-  - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, apps,
+  - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, clear_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
 - `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
   device; `tools.test.mjs` checks the tool list, a 3200-char budget for tool definitions (JSON), and

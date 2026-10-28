@@ -33,6 +33,7 @@ export function describeStep(s: Step): string {
   switch (s.op) {
     case "launch":
     case "stop_app":
+    case "clear_app":
       return `${s.op} ${s.package}`;
     case "type": {
       const into = s.field !== undefined ? ` into ${quote(s.field)}` : t ? ` into ${t}` : "";
