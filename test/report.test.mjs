@@ -2,6 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { describeStep, Reporter } from "../dist/report.js";
 
+test("a repeat line says how many rounds ran", () => {
+  const rep = new Reporter([{ op: "repeat", times: 3, while: { visible: "A" }, steps: [{ tap: "A" }] }], false);
+  assert.match(rep.step(0, { op: "repeat", ok: true, ms: 5, out: "ran 0 times" }), /ran 0x$/);
+  assert.match(rep.step(0, { op: "repeat", ok: true, ms: 5, out: "ran 2 times" }), /ran 2x$/);
+});
+
 test("steps are labelled from the flow as written", () => {
   for (const [step, label] of [
     [{ op: "launch", package: "com.app" }, "launch com.app"],

@@ -52,7 +52,11 @@ export const FLOWS_DIR = ".moreplay/flows";
 export const EVIDENCE_DIR = ".moreplay/evidence";
 
 export function toCompact(step: Step): Record<string, unknown> {
-  const { op, ...params } = step;
+  const { op, ...rest } = step;
+  // repeat / run_flow carry their own steps, recorded from act in the {op: ...} form.
+  const params = Array.isArray(rest.steps)
+    ? { ...rest, steps: (rest.steps as Record<string, unknown>[]).map((s) => toCompact(fromCompact(s))) }
+    : rest;
   const keys = Object.keys(params);
   const short = SHORT_KEY[op];
   if (short && keys.length === 1 && keys[0] === short && typeof params[short] !== "object") return { [op]: params[short] };

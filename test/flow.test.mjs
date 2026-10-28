@@ -61,6 +61,16 @@ test("recording replaces refs with the selector the agent reported", () => {
   for (const op of ["observe", "apps", "wait_idle"]) assert.equal(toRecorded({ op }, { op, ok: true, ms: 1 }), null);
 });
 
+test("steps inside repeat and run_flow are saved in the short form too", () => {
+  const rec = new Recorder("pick");
+  rec.add({ op: "repeat", times: 3, steps: [{ op: "tap", text: "A" }, { op: "wait_idle", timeout: 3000 }] }, { op: "repeat", ok: true, ms: 1 });
+  rec.add({ op: "run_flow", steps: [{ op: "key", key: "back" }] }, { op: "run_flow", ok: true, ms: 1 });
+  assert.deepEqual(rec.toFile().steps, [
+    { repeat: { times: 3, steps: [{ tap: "A" }, { wait_idle: { timeout: 3000 } }] } },
+    { run_flow: { steps: [{ key: "back" }] } },
+  ]);
+});
+
 test("act feeds only successful steps to the recorder", async () => {
   const rec = new Recorder("login");
   const d = fakeDevice((s) => (s.op === "wait_for" ? { ok: false, error: "not found" } : { ok: true, out: "done", sel: s.ref !== undefined ? { text: "Masuk" } : undefined }));

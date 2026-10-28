@@ -145,7 +145,14 @@ export class Reporter {
     }
     if (skipped) return `  ${this.paint("yellow", "–")} ${label} ${this.paint("yellow", "skipped".padStart(8))}`;
     const dismissed = /\(dismissed ([^)]*)\)/.exec(r.out ?? "");
-    const note = dismissed ? this.paint("dim", `  dismissed ${dismissed[1]}`) : "";
+    // How many rounds a repeat ran: 0 usually means its `while` was checked before the screen
+    // got there, which the label alone would hide.
+    const rounds = this.steps[i]?.op === "repeat" ? /^ran (\d+) times?/.exec(r.out ?? "") : null;
+    const note = dismissed
+      ? this.paint("dim", `  dismissed ${dismissed[1]}`)
+      : rounds
+        ? this.paint(rounds[1] === "0" ? "yellow" : "dim", `  ran ${rounds[1]}x`)
+        : "";
     return `  ${this.paint("green", "✓")} ${label} ${this.paint(r.ms >= 1000 ? "yellow" : "dim", ms)}${note}`;
   }
 

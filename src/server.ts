@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -60,7 +61,9 @@ export async function startServer(): Promise<void> {
       text(
         await runAct(device, substitute(steps, recorder?.vars ?? {}), {
           observeAfter: observe_after,
-          evidenceDir,
+          // A screenshot while recording is a rehearsal of the flow's own (a replay saves the real
+          // one), so it goes to a temp folder instead of a .moreplay/ in the client's project.
+          evidenceDir: recorder ? join(tmpdir(), "moreplay-recording") : evidenceDir,
           onSuccess: recorder && ((s, r) => recorder!.add(s, r)),
           subflows: {
             load: loadSubflow,
