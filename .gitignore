@@ -4,5 +4,7 @@ node_modules/
 *.jar
 dist/
 .moreplay/
+# output from before the rename
+.droidreplay/
 spike/evidence/
 .DS_Store
