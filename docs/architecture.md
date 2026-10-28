@@ -32,6 +32,14 @@ apps on screen
 `connect(int)`). `FLAG_RETRIEVE_INTERACTIVE_WINDOWS` is added to the service info. Pattern taken
 from AOSP `cmds/uiautomator` and openatx/android-uiautomator-server-jar.
 
+## Crashes
+
+When a step fails, `executeSteps` reads the crash buffer since the batch began (`logcat -b crash -T`)
+and, if the app died, appends `app crashed:` with the FATAL EXCEPTION header, the exception and
+its top four frames to that step's error. Only on failure (a passing batch costs nothing extra)
+and only at the top level (a subflow's failure is not reported twice). `droidreplay run` prints
+the crash under the failed step once the flow stops, since step lines stream before it is known.
+
 ## Timeouts
 
 Nothing waits forever. adb calls get 30 s (pushing the jar 2 min, `doctor`'s checks 10 s) and
@@ -95,6 +103,7 @@ exact matches if any, else contains), or with position keys in nearest-first ord
 | apps | `filter` | server (`pm list packages -3`) |
 | launch `args` | `{name: value}` intent extras: booleans `--ez`, integers `--ei`, other numbers `--ef`, the rest `--es` (single-quoted; names `[\w.-]+`) | server |
 | install_app / uninstall_app | `path` (relative to the working directory), `grant` (`-g`, every runtime permission) / `package` | server (`adb install -r`, 5 min limit; `pm uninstall`); both fail unless the answer is `Success` |
+| logs | `package`, `level` (V D I W E F, default W), `since` (`30s`, `2m`, `1h`; default 60s), `lines` (default 50, max 500) | server (`logcat -d -v brief -T <since>`, `--pid` while the app runs, else its crash buffer). Long lines are cut at 240 chars and repeats folded into `(xN)` to keep tokens down |
 | open_link | `url` (one line, single-quoted), optional `package` | server (`am start -W -a VIEW -d`; an `Error:` line fails the step) |
 | permissions | `package`, `grant` (names or `"all"`), `revoke`; `CAMERA` means `android.permission.CAMERA` | server (`pm grant/revoke`; `all` = the app's requested permissions from `dumpsys package`, skipping the ones pm refuses) |
 | screenshot | `name`: a file name (saved in `.droidreplay/evidence`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |

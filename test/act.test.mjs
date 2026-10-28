@@ -21,7 +21,8 @@ function fakeDevice({ fail = [], shell = {} } = {}) {
       return { ok: true, ms: 1, results };
     },
     async shell(cmd) {
-      calls.push({ shell: cmd });
+      // Every failure looks for a crash; tests about other calls leave that lookup out.
+      if (!cmd.includes("-b crash") || shell.recordCrashLookup) calls.push({ shell: cmd });
       for (const [k, v] of Object.entries(shell)) if (cmd.includes(k)) return v;
       return "";
     },
@@ -219,4 +220,36 @@ test("permissions grants and revokes short names, and grant all takes what the a
   const refused = fakeDevice({ shell: { "pm grant": "Exception occurred while executing 'grant': Unknown permission: X" } });
   assert.match(await runAct(refused, [{ op: "permissions", package: "com.app", grant: ["X"] }], opts), /pm grant android\.permission\.X: Exception/);
   assert.match(await runAct(fakeDevice(), [{ op: "permissions", package: "com.app", grant: ["CAMERA; reboot"] }], opts), /permission name not allowed/);
+});
+
+test("a failed step carries the app's crash; passing steps never look for one", async () => {
+  const crash = [
+    "--------- beginning of crash",
+    "E/AndroidRuntime( 4242): FATAL EXCEPTION: main",
+    "E/AndroidRuntime( 4242): Process: com.app, PID: 4242",
+    "E/AndroidRuntime( 4242): java.lang.NullPointerException: user was null",
+    "E/AndroidRuntime( 4242): \tat com.app.Home.render(Home.kt:42)",
+    "E/AndroidRuntime( 4242): \tat com.app.Home.onCreate(Home.kt:10)",
+    "",
+  ].join("\n");
+  const d = fakeDevice({ fail: ["wait_for"], shell: { "-b crash": crash, recordCrashLookup: true } });
+  const out = await runAct(d, [{ op: "tap", text: "Open" }, { op: "wait_for", text: "Home" }], opts);
+  assert.match(out, /✗ wait_for \d+ms\nnot found\napp crashed: FATAL EXCEPTION: main\nProcess: com\.app, PID: 4242\njava\.lang\.NullPointerException: user was null\n  at com\.app\.Home\.render\(Home\.kt:42\)/);
+
+  const ok = fakeDevice({ shell: { recordCrashLookup: true } });
+  await runAct(ok, [{ op: "tap", text: "Open" }], opts);
+  assert.ok(!ok.calls.some((c) => c.shell?.includes("-b crash")));
+});
+
+test("logs: one app's lines by pid, folded repeats, the crash buffer when it is not running", async () => {
+  const d = fakeDevice({ shell: { pidof: "4242\n", "--pid=4242": "W/Net( 4242): retry\nW/Net( 4242): retry\nW/Net( 4242): retry\nE/App( 4242): " + "x".repeat(300) + "\n" } });
+  const out = await runAct(d, [{ op: "logs", package: "com.app", level: "w", since: "2m", lines: 10 }], opts);
+  assert.match(out, /com\.app, level W\+, last 120s: 2 line\(s\)\nW\/Net\( 4242\): retry \(x3\)\nE\/App\( 4242\): x{220,}…/);
+  assert.ok(d.calls.some((c) => c.shell?.includes(`logcat -d -v brief -T "$(($(date +%s)-120)).000" --pid=4242 '*:W'`)));
+
+  const gone = fakeDevice({ shell: { pidof: "", recordCrashLookup: true } });
+  assert.match(await runAct(gone, [{ op: "logs", package: "com.app" }], opts), /com\.app \(not running; crash buffer\), level W\+, last 60s: nothing/);
+  assert.ok(gone.calls.some((c) => c.shell?.startsWith("logcat -d -b crash")));
+  assert.match(await runAct(fakeDevice(), [{ op: "logs", level: "loud" }], opts), /level must be one of V D I W E F/);
+  assert.match(await runAct(fakeDevice(), [{ op: "logs", since: "yesterday" }], opts), /since must look like 30s/);
 });
