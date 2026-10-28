@@ -72,12 +72,20 @@ empty one is usually an env var that was never filled in). To make a var optiona
 ```
 
 `file` is relative to the flow that calls it. `when` is checked once on the current screen; when
-it is not met the step passes as skipped. `while` is checked before each round.
+it is not met the step passes as skipped. `while` is checked before each round. Neither waits:
+if the element may still be loading (a search result, a screen opening), put a `wait_for` before
+it, or the repeat runs 0 rounds (`moreplay run` shows `ran 0x` on that line).
+
+Steps inside `repeat` and `run_flow` are saved in the same short form as the others.
 
 ## Replays and failures
 
+Replay a flow once right after saving it. A replay acts faster than the recording session did,
+so timing problems (tapping while a list still closes) show up there, not while recording.
+
 Replays wait for each element (5 s by default), so flows need no sleeps. Screenshots go to
-`.moreplay/evidence/<flow>/<date-time>/`.
+`.moreplay/evidence/<flow>/<date-time>/`. Screenshots taken by `act` while recording go to a temp
+folder instead, since the replay saves the real ones.
 
 When a step fails, the run stops and reports the step number, the error, the screen, and a
 `failed-step-N.jpg` / `.txt`. Fix the step with

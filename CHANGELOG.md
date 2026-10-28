@@ -5,6 +5,14 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- Recording saves steps inside `repeat` and `run_flow` in the short form (`- tap: A`, not
+  `- op: tap`).
+- `moreplay run` shows how many rounds a `repeat` ran (`ran 0x` in yellow).
+- Screenshots taken by `act` while recording go to a temp folder, not a `.moreplay/` folder in
+  the AI app's working directory.
+- The MCP instructions say to replay a flow right after saving it, and that `repeat {while}` /
+  `run_flow {when}` check the screen without waiting.
+
 - A `${NAME}` whose value is empty fails before the flow runs, naming the var. It used to type
   nothing, pass, and fail much later with an unrelated timeout. `${!!NAME}` still accepts empty.
 - A selector tap reports the label it hit, and `(partial match for "x")` when the text only

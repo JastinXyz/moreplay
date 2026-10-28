@@ -235,7 +235,10 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
 - **Recording** (`flow record` ... `flow save`): every successful `act` step goes to the
   recorder. observe, apps and wait_idle are dropped; `wait` is stripped. A `ref` becomes the
   agent's `sel`: unique id, else unique label, else id + own text, else label; with neither,
-  the tapped coordinates. For `type`, a label selector is stored as `field`.
+  the tapped coordinates. For `type`, a label selector is stored as `field`. Steps inside
+  `repeat` / `run_flow` are compacted the same way (`toCompact` recurses into `steps`), and
+  screenshots taken by `act` while recording go to `$TMPDIR/moreplay-recording` rather than
+  the client's working directory (it is a rehearsal; the replay saves the real evidence).
 - **Secrets while recording**: `flow record{name, vars}` keeps the vars for the session. `act`
   fills `${var}` from them before the steps reach the device (a `${var}` with no value fails
   before anything runs), and the recorder writes every occurrence of a value (3+ chars,
@@ -284,6 +287,8 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
 - **Loops** (`repeat`, a host op): `steps` run up to `times`, while `while: {visible | notVisible:
   target}` holds (checked before each round, like run_flow's `when`). `while` alone stops after
   100 rounds with an error rather than looping forever. A failure names the round and step.
+  The step's output is `ran N times`, and `moreplay run` prints `ran Nx` on its line (yellow for
+  0): a `while` checked before a debounced search result appeared ran 0 rounds unnoticed.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).
 
