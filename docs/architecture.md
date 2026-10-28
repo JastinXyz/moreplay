@@ -198,7 +198,8 @@ tap, type, scroll and wait_for work on it unchanged. Tested on an Android WebVie
 Tap points: `[x,y]` of a tap target is the center of its visible part, not of its bounds. Later
 siblings of the node or of its ancestors (a bottom tab bar, a floating tab bar, a sheet) are cut
 away when they span at least 90% of its width or height; a later sibling that fills its parent
-covers only with its content, and one with no content and no image (React Native lists a
+covers only with its content (above means later in drawing order, `getDrawingOrder()`, not child
+order: React Native draws a zIndex-raised PIN lock above the home screen listed after it), and one with no content and no image (React Native lists a
 background shape drawn behind with `zIndex` after the header it sits under) covers nothing.
 Position selectors (`below`, `above`, ...) skip candidates that are covered, so a node hidden
 behind a bottom sheet cannot win as the nearest. A node hidden entirely (with its subtree) is not listed, and the

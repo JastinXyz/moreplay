@@ -375,10 +375,12 @@ final class Device {
             bounds[i] = new Rect();
             if (kids[i] != null && kids[i].isVisibleToUser()) kids[i].getBoundsInScreen(bounds[i]);
         }
+        int[] rank = drawRank(n);
         for (int i = 0; i < count; i++) {
             if (kids[i] == null) continue;
             List<Rect> mine = covers;
-            for (int j = i + 1; j < count; j++) {
+            for (int j = 0; j < count; j++) {
+                if (rank[j] <= rank[i]) continue; // only siblings drawn above this one cover it
                 if (bounds[j] == null || bounds[j].isEmpty() || !Rect.intersects(bounds[i], bounds[j])) continue;
                 if (cover[j] == null) cover[j] = coverOf(kids[j], bounds[j], pb);
                 if (mine == covers) mine = new ArrayList<>(covers);
@@ -424,13 +426,38 @@ final class Device {
      * count, and neither does a sibling beside the cover's content: a full-size ad container
      * whose content starts below a header leaves that header visible.
      */
+    /**
+     * Each child's place in drawing order: higher is drawn later, so it is on top. That is the
+     * child order unless the parent reorders drawing, which React Native does for zIndex: a PIN
+     * lock listed before the home screen it covers was hidden as if the home covered it.
+     */
+    private static int[] drawRank(AccessibilityNodeInfo n) {
+        int count = n.getChildCount();
+        int[] order = new int[count];
+        Integer[] idx = new Integer[count];
+        for (int i = 0; i < count; i++) {
+            AccessibilityNodeInfo c = n.getChild(i);
+            order[i] = c == null ? i : c.getDrawingOrder();
+            idx[i] = i;
+        }
+        java.util.Arrays.sort(idx, (a, b) -> order[a] != order[b] ? Integer.compare(order[a], order[b]) : Integer.compare(a, b));
+        int[] rank = new int[count];
+        for (int r = 0; r < count; r++) rank[idx[r]] = r;
+        return rank;
+    }
+
     private static boolean[] coveredScreens(AccessibilityNodeInfo n) {
         int count = n.getChildCount();
         if (count < 2) return null;
         Rect parent = new Rect();
         n.getBoundsInScreen(parent);
         if (parent.isEmpty()) return null;
-        for (int i = count - 1; i > 0; i--) {
+        int[] rank = drawRank(n);
+        // Children from the top-most drawn down.
+        Integer[] byRank = new Integer[count];
+        for (int k = 0; k < count; k++) byRank[rank[k]] = k;
+        for (int pos = count - 1; pos > 0; pos--) {
+            int i = byRank[pos];
             AccessibilityNodeInfo c = n.getChild(i);
             if (c == null || !c.isVisibleToUser()) continue;
             Rect r = new Rect();
@@ -440,7 +467,8 @@ final class Device {
             contentBounds(c, cover, new int[] {COVER_SCAN_LIMIT});
             if (cover.height() < parent.height() * COVER_SPAN) continue;
             boolean[] hidden = new boolean[count];
-            for (int k = 0; k < i; k++) {
+            for (int k = 0; k < count; k++) {
+                if (rank[k] >= rank[i]) continue; // drawn above the cover, or the cover itself
                 Rect content = new Rect();
                 contentBounds(n.getChild(k), content, new int[] {COVER_SCAN_LIMIT});
                 Rect overlap = new Rect();
@@ -694,15 +722,18 @@ final class Device {
         while (parent != null && !r.isEmpty()) {
             Rect pb = new Rect();
             parent.getBoundsInScreen(pb);
-            boolean after = false;
-            for (int i = 0; i < parent.getChildCount(); i++) {
+            int count = parent.getChildCount();
+            int me = -1;
+            for (int i = 0; i < count && me < 0; i++) {
                 AccessibilityNodeInfo sib = parent.getChild(i);
-                if (sib == null) continue;
-                if (!after) {
-                    after = sib.equals(child);
-                    continue;
-                }
-                if (!sib.isVisibleToUser()) continue;
+                if (sib != null && sib.equals(child)) me = i;
+            }
+            // Siblings drawn above this one cover it (drawing order, not child order).
+            int[] rank = me < 0 ? null : drawRank(parent);
+            for (int i = 0; i < count && rank != null; i++) {
+                if (i == me || rank[i] <= rank[me]) continue;
+                AccessibilityNodeInfo sib = parent.getChild(i);
+                if (sib == null || !sib.isVisibleToUser()) continue;
                 Rect sb = new Rect();
                 sib.getBoundsInScreen(sb);
                 if (!Rect.intersects(sb, r)) continue;
@@ -1252,6 +1283,16 @@ final class Device {
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
         if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) throw new IllegalStateException("set text failed");
+        // A field can refuse the text without an error (a numeric PIN box given "\"123456\"" with
+        // its quotes), which only showed up a minute later on an unrelated wait. Fail here instead.
+        if (!value.isEmpty()) {
+            SystemClock.sleep(60);
+            field.refresh();
+            CharSequence now = field.getText();
+            if (now == null || now.length() == 0 || field.isShowingHintText()) {
+                throw new IllegalStateException("the field did not take the text (it is still empty; does it accept these characters?)");
+            }
+        }
         if (s.optBoolean("submit", false)) key("enter");
         return "typed " + value.length() + " chars";
     }
