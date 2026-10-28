@@ -69,7 +69,7 @@ Each step is `{"op": "...", ...}`. Targets for tap/long_press/type/wait_*:
 `ref` (from the latest observe) | `x`,`y` | `text` (text or content-desc, exact first, then
 contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. When the matched node
 is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
-text/id/desc target until it appears; replays set it on every targeted step.
+text/id/desc target until it appears and is not covered (a splash screen or a sheet still on top); replays set it on every targeted step. When the cover is another app's window, the error names it (`is behind a dialog from <package> ("...")`).
 
 Text (and desc) written `"/like this/"` is a regex, case-insensitive, compiled once per
 pattern: the whole text matching counts as exact, a match inside it as contains. Plain text is
@@ -99,7 +99,7 @@ measured as the union of every window the system lists.
 |---|---|---|
 | observe | | agent |
 | tap / long_press | target, `ms` for long_press | agent |
-| type | `value`, optional target or `field` (label text), `submit`, `append` | agent (ACTION_SET_TEXT) |
+| type | `value`, optional target or `field` (label text), `submit`, `append` (ignored while the field shows its hint) | agent (ACTION_SET_TEXT) |
 | scroll | `dir`, optional `until` {target}, `max` | agent (scroll action, swipe fallback) |
 | swipe | `x1,y1,x2,y2,ms` | agent |
 | key | back, home, enter, recents, delete, tab, or a keycode | agent |
@@ -108,7 +108,7 @@ measured as the union of every window the system lists.
 | sleep | `ms` | agent |
 | hide_keyboard | | agent (back while the input-method window is listed, then waits up to 1.5 s for it to go; a no-op when none is shown) |
 | windows | | agent (debug: every window the system reports, with type/layer/title) |
-| launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`) |
+| launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`, then waits 1.5 s and up to 3 s more for Android's asynchronous runtime-permission reset, which otherwise revokes a grant made right after) |
 | apps | `filter` | server (`pm list packages -3`) |
 | launch `args` | `{name: value}` intent extras: booleans `--ez`, integers `--ei`, other numbers `--ef`, the rest `--es` (single-quoted; names `[\w.-]+`) | server |
 | install_app / uninstall_app | `path` (relative to the working directory), `grant` (`-g`, every runtime permission) / `package` | server (`adb install -r`, 5 min limit; `pm uninstall`); both fail unless the answer is `Success` |
