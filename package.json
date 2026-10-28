@@ -1,6 +1,6 @@
 {
   "name": "moreplay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fast Android MCP server: no APK install, on-device waits and batching",
   "license": "MIT",
   "type": "module",
