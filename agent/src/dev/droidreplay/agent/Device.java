@@ -210,6 +210,7 @@ final class Device {
     }
 
     private boolean keyboardShown;
+    private static final long KEYBOARD_QUIET_MS = 400;
 
     /**
      * Windows a user can act on, top-most first: app windows (activities, dialogs, popups,
@@ -545,9 +546,10 @@ final class Device {
         AccessibilityNodeInfo n = find(s);
         AccessibilityNodeInfo target = tapTarget(n);
         Rect r = target == null ? new Rect() : visibleRect(target);
-        // Not there yet, or there but still covered (a splash screen or a sheet sliding away):
-        // both wait out the step's `wait`.
-        while ((n == null || r.isEmpty()) && SystemClock.uptimeMillis() < deadline) {
+        // Not there yet, still covered (a splash screen or a sheet sliding away), or still
+        // disabled (a submit button the app enables once it has processed the input just typed):
+        // all wait out the step's `wait`. A target still disabled then is tapped anyway, as Maestro does.
+        while ((n == null || r.isEmpty() || disabled(target, s)) && SystemClock.uptimeMillis() < deadline) {
             // Time spent on a popup does not count against the step's own wait.
             if (dismissAny(s)) deadline = SystemClock.uptimeMillis() + wait;
             else SystemClock.sleep(POLL_MS);
@@ -567,6 +569,11 @@ final class Device {
             throw new Missing(describe(s) + (front != null ? " is behind " + front + " (handle it first)" : " is covered by another element (scroll it into view)"));
         }
         return new int[]{r.centerX(), r.centerY()};
+    }
+
+    /** Whether `t` is disabled while the selector does not ask about `enabled` itself. */
+    private static boolean disabled(AccessibilityNodeInfo t, JSONObject s) {
+        return t != null && !t.isEnabled() && !s.has("enabled");
     }
 
     /** What a tap on `n` hits: its nearest clickable or editable ancestor (text sits on a child), else n. */
@@ -788,15 +795,32 @@ final class Device {
     }
 
     /** Back closes the keyboard; waits until the system no longer lists its window. */
+    /**
+     * Presses back while the keyboard shows, until it has stayed hidden for KEYBOARD_QUIET_MS. A
+     * keyboard still sliding in after a tap on a field is not listed yet: returning at once let it
+     * appear afterwards, and the next tap only closed it (React Native's default for a ScrollView).
+     */
     private String hideKeyboard() {
-        windows();
-        if (!keyboardShown) return "keyboard already hidden";
-        key("back");
-        long deadline = SystemClock.uptimeMillis() + 1500;
-        while (SystemClock.uptimeMillis() < deadline) {
-            SystemClock.sleep(POLL_MS);
+        long now = SystemClock.uptimeMillis();
+        long deadline = now + 3000, hiddenSince = now, backAt = 0;
+        boolean pressed = false;
+        while (now < deadline) {
             windows();
-            if (!keyboardShown) return "hidden";
+            if (keyboardShown) {
+                hiddenSince = -1;
+                // One back per second at most: a second one while it closes would leave the screen.
+                if (now - backAt >= 1000) {
+                    key("back");
+                    backAt = now;
+                    pressed = true;
+                }
+            } else if (hiddenSince < 0) {
+                hiddenSince = now;
+            } else if (now - hiddenSince >= KEYBOARD_QUIET_MS) {
+                return pressed ? "hidden" : "keyboard already hidden";
+            }
+            SystemClock.sleep(POLL_MS);
+            now = SystemClock.uptimeMillis();
         }
         throw new IllegalStateException("keyboard still shown after back");
     }

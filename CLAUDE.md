@@ -132,5 +132,9 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
   (a new `adb forward tcp:0` per restart leaked the old one).
 - The MCP server must exit on stdin close and remove its `adb forward` in the exit handler,
   or forwards pile up.
+- A keyboard opening after a tap on a field is not listed for a few hundred ms. `hide_keyboard`
+  that returned "already hidden" then let it appear, and the next tap only closed it (React
+  Native's ScrollView default `keyboardShouldPersistTaps`), so a login replay stuck on its form.
+  It now waits until the keyboard has stayed hidden for 400 ms.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's
   rooted POCO X5 worked without a visible error; unproven on stock devices).
