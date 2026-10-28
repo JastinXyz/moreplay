@@ -71,6 +71,13 @@ export async function runCli(args: string[]): Promise<number> {
   }
 
   const device = new Device();
+  // Ctrl+C or a kill still removes the adb forward and stops the agent (finally does not run then).
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      device.stop();
+      process.exit(130);
+    });
+  }
   const t0 = Date.now();
   const results: FlowReport[] = [];
   try {

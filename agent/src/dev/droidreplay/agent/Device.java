@@ -540,15 +540,21 @@ final class Device {
             return new int[]{ref.x, ref.y};
         }
         if (s.has("x") && s.has("y")) return new int[]{coord(s, "x", true), coord(s, "y", false)};
-        AccessibilityNodeInfo n = find(s);
         long wait = s.optLong("wait", 0);
         long deadline = SystemClock.uptimeMillis() + wait;
-        while (n == null && SystemClock.uptimeMillis() < deadline) {
+        AccessibilityNodeInfo n = find(s);
+        AccessibilityNodeInfo target = tapTarget(n);
+        Rect r = target == null ? new Rect() : visibleRect(target);
+        // Not there yet, or there but still covered (a splash screen or a sheet sliding away):
+        // both wait out the step's `wait`.
+        while ((n == null || r.isEmpty()) && SystemClock.uptimeMillis() < deadline) {
             // Time spent on a popup does not count against the step's own wait.
             if (dismissAny(s)) deadline = SystemClock.uptimeMillis() + wait;
             else SystemClock.sleep(POLL_MS);
             clearCacheEvery(CLEAR_EVERY_MS);
             n = find(s);
+            target = tapTarget(n);
+            r = target == null ? new Rect() : visibleRect(target);
         }
         if (n == null) throw new Missing("not found: " + describe(s));
         lastSel = new JSONObject();
@@ -556,13 +562,42 @@ final class Device {
         for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
         if (s.has("index")) lastSel.put("index", s.optInt("index"));
         for (String k : new String[]{"enabled", "checked", "selected", "focused", "childOf", "containsChild"}) if (s.has(k)) lastSel.put(k, s.opt(k));
-        AccessibilityNodeInfo target = n;
-        // Text usually sits on a child of the thing that is actually clickable.
-        while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
-        if (target == null) target = n;
-        Rect r = visibleRect(target);
-        if (r.isEmpty()) throw new Missing(describe(s) + " is covered by another element (scroll it into view)");
+        if (r.isEmpty()) {
+            String front = frontDialog(target);
+            throw new Missing(describe(s) + (front != null ? " is behind " + front + " (handle it first)" : " is covered by another element (scroll it into view)"));
+        }
         return new int[]{r.centerX(), r.centerY()};
+    }
+
+    /** What a tap on `n` hits: its nearest clickable or editable ancestor (text sits on a child), else n. */
+    private static AccessibilityNodeInfo tapTarget(AccessibilityNodeInfo n) {
+        AccessibilityNodeInfo t = n;
+        while (t != null && !t.isClickable() && !t.isEditable()) t = t.getParent();
+        return t != null ? t : n;
+    }
+
+    /**
+     * When another app's window sits in front of `n`'s (a permission prompt, a system dialog):
+     * "a dialog from <package> ("<its first text>")", else null.
+     */
+    private String frontDialog(AccessibilityNodeInfo n) {
+        List<Win> ws = windows();
+        if (ws.isEmpty() || n.getPackageName() == null) return null;
+        AccessibilityNodeInfo top = ws.get(0).root;
+        CharSequence pkg = top.getPackageName();
+        if (pkg == null || pkg.toString().equals(n.getPackageName().toString())) return null;
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        flatten(top, all);
+        String text = null;
+        for (AccessibilityNodeInfo x : all) {
+            CharSequence t = x.getText() != null ? x.getText() : x.getContentDescription();
+            if (t != null && t.toString().trim().length() > 0) {
+                text = t.toString().trim();
+                break;
+            }
+        }
+        if (text != null && text.length() > 80) text = text.substring(0, 79) + "…";
+        return "a dialog from " + pkg + (text != null ? " (\"" + text + "\")" : "");
     }
 
     /**
@@ -1094,7 +1129,8 @@ final class Device {
         }
         if (field == null || !field.isEditable()) throw new IllegalStateException("no focused text field");
         String value = s.optString("value");
-        if (s.optBoolean("append", false) && field.getText() != null) value = field.getText() + value;
+        // An empty field reports its hint as its text; appending to that would type the hint too.
+        if (s.optBoolean("append", false) && field.getText() != null && !field.isShowingHintText()) value = field.getText() + value;
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
         if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) throw new IllegalStateException("set text failed");

@@ -288,7 +288,7 @@ ways (Maestro reads it from `-e var=...`).
 | wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
 | repeat, hide_keyboard, `index` | `repeat: {times, while: {visible / notVisible}, commands}`, `hideKeyboard`, selector `index` (0-based on both sides) |
-| launch args, open_link, permissions | `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
+| launch args, open_link, permissions | `launchApp` without `permissions` imports as `permissions {grant: all}` + launch, because Maestro grants everything on launchApp by default (`Orchestra.kt`: "default to allow all on app launch"); export folds that pair back into a plain `launchApp`. `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
 | run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: "${...}"}` keeps its expression, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative

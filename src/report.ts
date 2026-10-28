@@ -80,8 +80,8 @@ export function describeStep(s: Step): string {
     case "run_flow": {
       const what = typeof s.file === "string" ? s.file : `${Array.isArray(s.steps) ? s.steps.length : 0} steps`;
       const w = (s.when ?? null) as Record<string, unknown> | null;
-      const k = w && ("notVisible" in w ? "notVisible" : "visible");
-      const cond = w && k ? ` when ${k} ${w[k] && typeof w[k] === "object" ? target(w[k] as Record<string, unknown>) : quote(w[k])}` : "";
+      const k = w && ("true" in w ? "true" : "notVisible" in w ? "notVisible" : "visible");
+      const cond = !w || !k ? "" : k === "true" ? ` when ${w.true}` : ` when ${k} ${w[k] && typeof w[k] === "object" ? target(w[k] as Record<string, unknown>) : quote(w[k])}`;
       return `run_flow ${what}${cond}`;
     }
     case "swipe":

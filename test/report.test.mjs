@@ -14,6 +14,7 @@ test("steps are labelled from the flow as written", () => {
     [{ op: "wait_for", text: "42" }, 'wait_for "42"'],
     [{ op: "key", key: "back" }, "key back"],
     [{ op: "run_flow", file: "shared/pin.yaml" }, "run_flow shared/pin.yaml"],
+    [{ op: "run_flow", when: { true: "${CLEAR == 'true'}" }, steps: [{ clear_app: "com.app" }] }, "run_flow 1 steps when ${CLEAR == 'true'}"],
     [{ op: "tap", text: "Save", index: 1 }, 'tap "Save" [1]'],
     [{ op: "tap", text: "Wi-Fi", checked: false }, 'tap "Wi-Fi" !checked'],
     [{ op: "tap", containsChild: "Settings" }, 'tap containsChild "Settings"'],
