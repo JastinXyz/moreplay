@@ -12,7 +12,7 @@ export interface ActDevice {
 export type Step = { op: string } & Record<string, unknown>;
 
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
-export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot"]);
+export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot", "run_flow"]);
 
 // How long the tree must stay unchanged before a screenshot step captures it.
 const SETTLE_MS = 400;
@@ -31,11 +31,65 @@ export function withActWaits(steps: Step[]): Step[] {
   );
 }
 
+/**
+ * What `run_flow` needs to expand a subflow. flow.ts supplies it (loading files, vars, waits),
+ * so this file does not depend on it.
+ */
+export interface Subflows {
+  /** Reads a subflow file given relative to `dir`: its raw steps and the folder it lives in. */
+  load(file: string, dir: string): Promise<{ steps: Record<string, unknown>[]; dir: string }>;
+  /** Raw (short or act form) steps -> runnable steps with these vars filled in. */
+  prepare(steps: Record<string, unknown>[], vars: Record<string, string>): Step[];
+  vars: Record<string, string>;
+  /** Folder that relative subflow files resolve against. */
+  dir: string;
+  depth?: number;
+}
+
+// A flow that runs itself would never end.
+const MAX_DEPTH = 8;
+
+/** `when: {visible: target}` or `{notVisible: target}`, checked once on the current screen. */
+async function conditionMet(device: ActDevice, when: unknown): Promise<boolean> {
+  const w = (when ?? {}) as Record<string, unknown>;
+  const gone = "notVisible" in w;
+  const t = gone ? w.notVisible : w.visible;
+  if (t === undefined) throw new Error("when needs visible or notVisible");
+  const sel = t && typeof t === "object" ? t : { text: String(t) };
+  const r = (await device.run([{ op: gone ? "wait_gone" : "wait_for", ...sel, timeout: 0 }])).results[0];
+  // Not met is a timeout; anything else (a bad regex, a bad anchor) is a real error.
+  if (r && !r.ok && !/^timeout waiting/.test(r.error ?? "")) throw new Error(r.error);
+  return !!r?.ok;
+}
+
+/** Runs a run_flow step; returns its output line or throws with the inner step that failed. */
+async function runSubflow(device: ActDevice, step: Step, evidenceDir: string, sub?: Subflows): Promise<string> {
+  if (!sub) throw new Error("run_flow is not available here");
+  const depth = sub.depth ?? 0;
+  if (depth >= MAX_DEPTH) throw new Error(`run_flow nested more than ${MAX_DEPTH} deep (does a flow run itself?)`);
+  if (step.when !== undefined && !(await conditionMet(device, step.when))) return "skipped (when not met)";
+  let raw: Record<string, unknown>[];
+  let dir = sub.dir;
+  if (typeof step.file === "string") ({ steps: raw, dir } = await sub.load(step.file, sub.dir));
+  else if (Array.isArray(step.steps)) raw = step.steps as Record<string, unknown>[];
+  else throw new Error("run_flow needs file or steps");
+  const vars = { ...sub.vars, ...((step.vars as Record<string, string> | undefined) ?? {}) };
+  const steps = sub.prepare(raw, vars);
+  const exec = await executeSteps(device, steps, evidenceDir, undefined, { ...sub, vars, dir, depth: depth + 1 });
+  if (exec.failedAt !== undefined) {
+    const o = exec.outcomes[exec.failedAt];
+    throw new Error(`step ${exec.failedAt + 1} (${o.step.op}) failed: ${o.result.error ?? ""}`);
+  }
+  return `ran ${steps.length} steps`;
+}
+
 export interface ActOptions {
   observeAfter?: boolean;
   evidenceDir: string;
   /** Gets every step that succeeded, with the agent's result, e.g. to record a flow. */
   onSuccess?: (step: Step, result: StepResult) => void;
+  /** Lets steps use run_flow. */
+  subflows?: Subflows;
 }
 
 export interface Outcome {
@@ -60,6 +114,7 @@ export async function executeSteps(
   steps: Step[],
   evidenceDir: string,
   onStep?: (result: StepResult, index: number) => void,
+  subflows?: Subflows,
 ): Promise<Execution> {
   const lines: string[] = [];
   let emitted = 0;
@@ -94,7 +149,8 @@ export async function executeSteps(
       // Evidence must show the screen a tap led to, not the transition. Replays tap and shoot
       // back to back, so let the screen settle first.
       if (step.op === "screenshot") await device.run([{ op: "wait_idle", quietMs: SETTLE_MS, timeout: 3000 }]);
-      result = { op: step.op, ok: true, ms: 0, out: await hostOp(device, step, evidenceDir) };
+      const out = step.op === "run_flow" ? await runSubflow(device, step, evidenceDir, subflows) : await hostOp(device, step, evidenceDir);
+      result = { op: step.op, ok: true, ms: 0, out };
     } catch (e) {
       result = { op: step.op, ok: false, ms: 0, error: (e as Error).message };
     }
@@ -110,7 +166,7 @@ export async function executeSteps(
 
 /** The `act` tool: executeSteps, then the screen afterwards unless told not to. */
 export async function runAct(device: ActDevice, steps: Step[], opts: ActOptions): Promise<string> {
-  const { lines, outcomes } = await executeSteps(device, withActWaits(steps), opts.evidenceDir);
+  const { lines, outcomes } = await executeSteps(device, withActWaits(steps), opts.evidenceDir, undefined, opts.subflows);
   // Record the steps as given: the implicit wait is not part of the flow.
   if (opts.onSuccess) outcomes.forEach((o, i) => o.result.ok && opts.onSuccess!(steps[i], o.result));
   if (opts.observeAfter !== false && steps[steps.length - 1].op !== "observe") {

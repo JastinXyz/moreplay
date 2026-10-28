@@ -142,6 +142,17 @@ Commit the flows you want to keep, and add `.droidreplay/evidence/` to your `.gi
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.
 
+Flows can reuse each other and handle screens that only sometimes appear:
+
+```yaml
+steps:
+  - run_flow: {file: shared/enter-pin.yaml, vars: {PROMPT: "Enter your PIN"}}
+  - run_flow:
+      when: {visible: "Rate this app"}
+      steps:
+        - tap: "Not now"
+```
+
 ### Maestro
 
 Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:

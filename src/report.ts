@@ -53,6 +53,13 @@ export function describeStep(s: Step): string {
       return `sleep ${s.ms} ms`;
     case "screenshot":
       return s.name ? `screenshot ${s.name}` : "screenshot";
+    case "run_flow": {
+      const what = typeof s.file === "string" ? s.file : `${Array.isArray(s.steps) ? s.steps.length : 0} steps`;
+      const w = (s.when ?? null) as Record<string, unknown> | null;
+      const k = w && ("notVisible" in w ? "notVisible" : "visible");
+      const cond = w && k ? ` when ${k} ${w[k] && typeof w[k] === "object" ? target(w[k] as Record<string, unknown>) : quote(w[k])}` : "";
+      return `run_flow ${what}${cond}`;
+    }
     case "swipe":
       return `swipe ${s.x1},${s.y1} -> ${s.x2},${s.y2}`;
   }

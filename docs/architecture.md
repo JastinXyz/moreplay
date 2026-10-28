@@ -43,8 +43,8 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
   response is NDJSON instead: one result object per step, written as the step finishes, then
   `{"done":true, "ok", "ms"}` (or `{"done":true, "ok":false, "error"}` if the run itself
   threw). Still one request, so no extra round trips; `droidreplay run` uses it to print each
-  step live (`Device.run(steps, stop, onResult)` -> `executeSteps(..., onLine)` ->
-  `runFlow({onLine})`). The MCP tools return one response, so they don't stream.
+  step live (`Device.run(steps, stop, onResult)` -> `executeSteps(..., onStep)` ->
+  `runFlow({onStep})`). The MCP tools return one response, so they don't stream.
 - `GET /screenshot?max=<longest side, 0 = full>&q=<jpeg quality>` -> `image/jpeg`
 
 ## Steps
@@ -201,6 +201,15 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   taps the first dismiss selector on screen, resets the step's wait, and notes
   `(dismissed text="...")` in its output. Found on a WebView app whose ad appears seconds after
   launch and shows "Lanjut ke aplikasi" only after a countdown.
+- **Subflows and conditions** (`run_flow`, a host op, so it splits the batch): `{file}` loads
+  another flow file relative to the calling flow's folder (`.yaml` optional), `{steps}` runs an
+  inline list; `vars` are layered on the caller's (a subflow's own `${var}`s are filled when it
+  runs, not up front). `when: {visible | notVisible: target}` is checked once on the current
+  screen (a `wait_for` / `wait_gone` with `timeout: 0`); not met reports `skipped (when not
+  met)` and passes. Inner steps get the same waits and `dismiss` list as the flow. A failure
+  names the inner step (`step 2 (tap) failed: ...`); nesting stops at 8 levels so a flow that
+  runs itself fails instead of looping. `act` takes run_flow too, with files relative to the
+  server's working directory.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).
 
@@ -223,9 +232,10 @@ ways (Maestro reads it from `-e var=...`).
 | swipe x1..y2 | `swipe: {start, end, duration}` (absolute points only on import) |
 | wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
+| run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: ...}` expressions are skipped, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
 selectors other than below/above/leftOf/rightOf (`index`, `childOf`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
-`runFlow`, `repeat`, scripts, `hideKeyboard` (import). observe/apps/windows export to nothing.
+`repeat`, scripts, `hideKeyboard`, `when: {true / platform}` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

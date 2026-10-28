@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { executeSteps, RELATIVE_KEYS, screen, type ActDevice, type Step } from "./act.js";
+import { executeSteps, RELATIVE_KEYS, screen, type ActDevice, type Step, type Subflows } from "./act.js";
 import type { StepResult } from "./device.js";
 
 /**
@@ -194,7 +194,12 @@ export function substitute(steps: Step[], vars: Record<string, string>): Step[] 
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]));
     return v;
   };
-  const out = steps.map((s) => fill(s) as Step);
+  // A run_flow's own steps are filled when it runs, with its vars on top of these.
+  const out = steps.map((s) => {
+    if (s.op !== "run_flow" || !("steps" in s)) return fill(s) as Step;
+    const { steps: inner, ...rest } = s;
+    return { ...(fill(rest) as Step), steps: inner };
+  });
   if (missing.size) throw new Error(`missing variable(s): ${[...missing].join(", ")} (pass them in vars / --var)`);
   return out;
 }
@@ -221,6 +226,8 @@ export interface RunFlowOptions {
   waitMs?: number;
   /** Append the screen at the failing step (for a model to patch the flow). */
   screenOnFailure?: boolean;
+  /** Folder of the flow file; relative run_flow files resolve against it (default: cwd). */
+  dir?: string;
   /** Gets each step's result (0-based index) as soon as it finishes; the CLI prints them live. */
   onStep?: (index: number, result: StepResult) => void;
 }
@@ -241,7 +248,10 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
   const evidenceDir = join(opts.evidenceDir, safeFlowName(flow.name), stamp);
   const t0 = Date.now();
-  const exec = await executeSteps(device, steps, evidenceDir, opts.onStep && ((r, i) => opts.onStep!(i, r)));
+  const prepare = (raw: Record<string, unknown>[], vars: Record<string, string>) =>
+    withDismiss(withWaits(substitute(raw.map(fromCompact), vars), opts.waitMs), flow.dismiss);
+  const subflows: Subflows = { load: loadSubflow, prepare, vars: opts.vars ?? {}, dir: opts.dir ?? process.cwd() };
+  const exec = await executeSteps(device, steps, evidenceDir, opts.onStep && ((r, i) => opts.onStep!(i, r)), subflows);
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   const shots = exec.outcomes.some((o) => o.step.op === "screenshot" && o.result.ok);
   const lines = exec.lines.map((l, i) => `${i + 1}. ${l}`);
@@ -268,6 +278,14 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
     tail.push(`Fix it with flow {action: "patch", name: "${flow.name}", index: ${n}, steps: [...]}, then run again.`);
   }
   return done(false, n);
+}
+
+/** A run_flow file: a path (`.yaml` optional) relative to the calling flow's folder. */
+export async function loadSubflow(file: string, dir: string): Promise<{ steps: Record<string, unknown>[]; dir: string }> {
+  const named = /\.ya?ml$/.test(file) ? file : `${file}.yaml`;
+  const path = isAbsolute(named) ? named : resolve(dir, named);
+  const { flow } = await loadFlow(dir, path);
+  return { steps: flow.steps, dir: dirname(path) };
 }
 
 /** Replaces step `index` (1-based) with `steps` (zero steps deletes it). */

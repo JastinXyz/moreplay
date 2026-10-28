@@ -128,6 +128,29 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
       return ["waitForAnimationToEnd"];
     case "screenshot":
       return [{ takeScreenshot: String(s.name ?? "screenshot") }];
+    case "run_flow": {
+      const out: Record<string, unknown> = {};
+      if (s.when && typeof s.when === "object") {
+        const w = s.when as Record<string, unknown>;
+        const k = "notVisible" in w ? "notVisible" : "visible";
+        const t = w[k];
+        const sel = toSelector(t && typeof t === "object" ? (t as Record<string, unknown>) : { text: t });
+        if (!sel) return null;
+        out.when = { [k]: sel };
+      }
+      if (typeof s.file === "string") out.file = s.file;
+      if (s.vars && typeof s.vars === "object") out.env = s.vars;
+      if (Array.isArray(s.steps)) {
+        const cmds: Cmd[] = [];
+        for (const raw of s.steps as Record<string, unknown>[]) {
+          const inner = stepToMaestro(fromCompact(raw), appId);
+          if (!inner) return null;
+          cmds.push(...inner);
+        }
+        out.commands = cmds;
+      }
+      return [Object.keys(out).length === 1 && out.file ? { runFlow: out.file } : { runFlow: out }];
+    }
     case "observe":
     case "apps":
     case "windows":
@@ -254,8 +277,45 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
       return [{ op: "wait_idle", ...(obj.timeout !== undefined ? { timeout: Number(obj.timeout) } : {}) }];
     case "takeScreenshot":
       return [{ op: "screenshot", name: String(typeof arg === "object" && arg ? obj.path : arg ?? "screenshot") }];
+    case "runFlow": {
+      if (typeof arg === "string") return [{ op: "run_flow", file: arg }];
+      const step: Step = { op: "run_flow" };
+      if (obj.when !== undefined) {
+        const w = (obj.when ?? {}) as Record<string, unknown>;
+        const keys = Object.keys(w);
+        if (keys.length !== 1 || (keys[0] !== "visible" && keys[0] !== "notVisible")) throw new Error(`runFlow when ${keys.join(", ")}`);
+        const t = fromSelector(w[keys[0]]);
+        if (typeof t === "string") throw new Error(t);
+        const tk = Object.keys(t);
+        step.when = { [keys[0]]: tk.length === 1 && tk[0] === "text" ? t.text : t };
+      }
+      if (obj.file !== undefined) step.file = String(obj.file);
+      if (obj.env && typeof obj.env === "object") {
+        step.vars = Object.fromEntries(Object.entries(obj.env as Record<string, unknown>).map(([k, v]) => [k, String(v)]));
+      }
+      if (Array.isArray(obj.commands)) step.steps = convertCommands(obj.commands as Cmd[], appId).map(toCompact);
+      if (step.file === undefined && step.steps === undefined) throw new Error("runFlow needs file or commands");
+      return [step];
+    }
   }
   return name;
+}
+
+/** Nested commands (runFlow's `commands`): all of them convert or the block is skipped as a whole. */
+function convertCommands(cmds: Cmd[], appId: string | undefined): Step[] {
+  const steps: Step[] = [];
+  cmds.forEach((c, i) => {
+    const [cmd, arg] = typeof c === "string" ? [c, undefined] : (Object.entries(c)[0] ?? ["?", undefined]);
+    let out: Step[] | string;
+    try {
+      out = cmdToSteps(cmd, arg, appId);
+    } catch (e) {
+      out = (e as Error).message;
+    }
+    if (typeof out === "string") throw new Error(`commands ${i + 1}: ${out}`);
+    steps.push(...out);
+  });
+  return mergeErase(steps);
 }
 
 /** A Maestro file as a flow. `name` wins over the header's name. */
