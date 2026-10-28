@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { runAct, saveScreenshot } from "./act.js";
 import { Device, VERSION } from "./device.js";
-import { EVIDENCE_DIR, FLOWS_DIR, flowName, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow } from "./flow.js";
+import { EVIDENCE_DIR, FLOWS_DIR, flowName, listFlows, loadFlow, patchSteps, substitute, Recorder, runFlow, saveFlow } from "./flow.js";
 
 /** Runs the MCP server on stdio until the client goes away. */
 export async function startServer(): Promise<void> {
@@ -51,8 +51,15 @@ export async function startServer(): Promise<void> {
         observe_after: z.boolean().optional().describe("default true"),
       },
     },
+    // ${var} in steps takes the values given to `flow record`; the recorder saves them as ${var} again.
     async ({ steps, observe_after }) =>
-      text(await runAct(device, steps, { observeAfter: observe_after, evidenceDir, onSuccess: recorder && ((s, r) => recorder!.add(s, r)) })),
+      text(
+        await runAct(device, substitute(steps, recorder?.vars ?? {}), {
+          observeAfter: observe_after,
+          evidenceDir,
+          onSuccess: recorder && ((s, r) => recorder!.add(s, r)),
+        }),
+      ),
   );
 
   server.registerTool(
@@ -81,10 +88,10 @@ export async function startServer(): Promise<void> {
     "flow",
     {
       description: [
-        "Record once, replay without observing. name = flow in the flows folder, or a .yaml path.",
-        "record{name}: keep every successful act step (refs become stable selectors). save / discard: end it.",
-        "run{name, vars?, evidence?=dir}: replay; steps wait for their element; screenshots go to <evidence>/<flow>/<time>/.",
-        "On failure returns the step number and the screen: fix with patch{name, index, steps} (steps:[] deletes), run again.",
+        "Record once, replay without a model. name: flow name or .yaml path.",
+        "record{name, vars?}: keep every successful act step (refs become stable selectors); ${var} in act takes vars, saved unexpanded. save / discard: end it.",
+        "run{name, vars?, evidence?=dir}: replay; steps wait for their element.",
+        "On failure: step number + screen; fix with patch{name, index, steps} (steps:[] deletes), run again.",
         "list, show{name}. Flow files may set dismiss:[text|{id}]: popups tapped away whenever they appear.",
       ].join("\n"),
       inputSchema: {
@@ -104,7 +111,7 @@ export async function startServer(): Promise<void> {
       switch (action) {
         case "record":
           recordTarget = need(name);
-          recorder = new Recorder(flowName(recordTarget));
+          recorder = new Recorder(flowName(recordTarget), vars);
           return text(`recording ${recorder.name}: act steps that succeed are kept until flow save`);
         case "save": {
           if (!recorder) throw new Error("not recording (flow record first)");

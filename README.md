@@ -95,7 +95,11 @@ runs only while your AI app is using droidreplay.
 ## Replay without the AI
 
 Ask the assistant to record a task ("start recording a flow called login"), let it do the
-task, then ask it to save the flow. You get a file like `.droidreplay/flows/login.yaml` (or wherever you ask it to save):
+task, then ask it to save the flow. You get a file like `.droidreplay/flows/login.yaml` (or wherever you ask it to save).
+
+Passwords and PINs stay out of the file: give them as variables when recording ("record a flow
+called login with the variable pin = 482913"), and the saved flow says `${pin}` wherever the
+value was typed. Pass the real value again when you replay it.
 
 ```yaml
 name: login
