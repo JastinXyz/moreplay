@@ -27,6 +27,11 @@ function target(s: Record<string, unknown>): string {
   if (s.id !== undefined) parts.push(`#${s.id}`);
   if (s.desc !== undefined) parts.push(`desc=${quote(s.desc)}`);
   if (s.index !== undefined) parts.push(`[${s.index}]`);
+  for (const k of ["enabled", "checked", "selected", "focused"]) if (s[k] !== undefined) parts.push(`${s[k] ? "" : "!"}${k}`);
+  for (const k of ["childOf", "containsChild"]) {
+    const a = s[k];
+    if (a !== undefined) parts.push(`${k} ${a && typeof a === "object" ? target(a as Record<string, unknown>) : quote(a)}`);
+  }
   for (const k of ["below", "above", "leftOf", "rightOf"]) {
     const a = s[k];
     if (a !== undefined) parts.push(`${k} ${a && typeof a === "object" ? target(a as Record<string, unknown>) : quote(a)}`);

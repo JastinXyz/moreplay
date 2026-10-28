@@ -100,6 +100,7 @@ name: login
     { tap: "Masuk" },
     { tap: { id: "close", optional: true } },
     { tap: { x: 10, y: 20 } },
+    { tap: { x: "50%", y: "50%" } },
     { tap: { text: "Simpan", below: "Nama" } },
     { tap: "Email" },
     { type: "${email}" },
@@ -115,9 +116,8 @@ name: login
     { screenshot: "home" },
     { stop_app: "com.app" },
   ]);
-  assert.equal(skipped.length, 2);
-  assert.match(skipped[0], /command 5: .*only absolute/);
-  assert.match(skipped[1], /command 20: .*evalScript/);
+  assert.equal(skipped.length, 1);
+  assert.match(skipped[0], /command 20: .*evalScript/);
 });
 
 test("export then import keeps the flow", () => {
@@ -331,5 +331,42 @@ test("openLink, launchApp arguments/permissions, setPermissions and killApp map 
     { openLink: "myapp://item/1" },
     { openLink: "https://example.com" },
     { setPermissions: { permissions: { all: "allow" } } },
+  ]);
+});
+
+test("percent points, states and childOf/containsChild map both ways", () => {
+  const { out, skipped } = fromMaestro(`appId: com.app
+---
+- tapOn:
+    point: "50%,90%"
+- swipe:
+    start: "90%,50%"
+    end: "10%,50%"
+- tapOn:
+    text: Wi-Fi
+    checked: false
+    enabled: true
+- tapOn:
+    containsChild: Settings
+- assertVisible:
+    text: Pay
+    childOf:
+      id: checkout_sheet
+`);
+  assert.deepEqual(skipped, []);
+  assert.deepEqual(out.steps, [
+    { tap: { x: "50%", y: "90%" } },
+    { swipe: { x1: "90%", y1: "50%", x2: "10%", y2: "50%", ms: 250 } },
+    { tap: { text: "Wi-Fi", checked: false, enabled: true } },
+    { tap: { containsChild: "Settings" } },
+    { wait_for: { text: "Pay", childOf: { id: "checkout_sheet" } } },
+  ]);
+  const [, cmds] = commands(toMaestro(out, "com.app").out);
+  assert.deepEqual(cmds, [
+    { tapOn: { point: "50%,90%" } },
+    { swipe: { start: "90%,50%", end: "10%,50%", duration: 250 } },
+    { tapOn: { text: "Wi-Fi", checked: false, enabled: true } },
+    { tapOn: { containsChild: "Settings" } },
+    { extendedWaitUntil: { visible: { text: "Pay", childOf: { id: "checkout_sheet" } } } },
   ]);
 });

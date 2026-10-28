@@ -184,7 +184,7 @@ final class Device {
             case "tap": return tap(s, false);
             case "long_press": return tap(s, true);
             case "type": return type(s);
-            case "swipe": return swipe(s.getInt("x1"), s.getInt("y1"), s.getInt("x2"), s.getInt("y2"), s.optInt("ms", 250));
+            case "swipe": return swipe(coord(s, "x1", true), coord(s, "y1", false), coord(s, "x2", true), coord(s, "y2", false), s.optInt("ms", 250));
             case "scroll": return scroll(s);
             case "key": return key(s.getString("key"));
             case "wait_for": return waitFor(s, false);
@@ -500,6 +500,34 @@ final class Device {
 
     // ---------------------------------------------------------------- selectors
 
+    /** Screen size in pixels: the union of every window the system lists (bars included). */
+    private Rect screen() {
+        Rect all = new Rect();
+        for (AccessibilityWindowInfo w : automation.getWindows()) {
+            Rect r = new Rect();
+            w.getBoundsInScreen(r);
+            all.union(r);
+        }
+        return all;
+    }
+
+    /** A coordinate in pixels, or "50%" of the screen's width (x) or height (y). */
+    private int coord(JSONObject s, String key, boolean horizontal) {
+        Object v = s.opt(key);
+        if (v instanceof String && ((String) v).trim().endsWith("%")) {
+            String t = ((String) v).trim();
+            double pct = Double.parseDouble(t.substring(0, t.length() - 1));
+            Rect r = screen();
+            return (int) Math.round((horizontal ? r.left + r.width() * pct / 100 : r.top + r.height() * pct / 100));
+        }
+        if (v instanceof Number) return ((Number) v).intValue();
+        try {
+            return Integer.parseInt(String.valueOf(v).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(key + " must be pixels or a percentage like \"50%\", got: " + v);
+        }
+    }
+
     /**
      * Resolves a step's selector (ref | x,y | text | id | desc) to a screen point. With "wait"
      * (ms), a text/id/desc selector is polled until it appears, which replays rely on.
@@ -511,7 +539,7 @@ final class Device {
             lastSel = selectorFor(ref);
             return new int[]{ref.x, ref.y};
         }
-        if (s.has("x") && s.has("y")) return new int[]{s.optInt("x"), s.optInt("y")};
+        if (s.has("x") && s.has("y")) return new int[]{coord(s, "x", true), coord(s, "y", false)};
         AccessibilityNodeInfo n = find(s);
         long wait = s.optLong("wait", 0);
         long deadline = SystemClock.uptimeMillis() + wait;
@@ -527,6 +555,7 @@ final class Device {
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
         for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
         if (s.has("index")) lastSel.put("index", s.optInt("index"));
+        for (String k : new String[]{"enabled", "checked", "selected", "focused", "childOf", "containsChild"}) if (s.has(k)) lastSel.put(k, s.opt(k));
         AccessibilityNodeInfo target = n;
         // Text usually sits on a child of the thing that is actually clickable.
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
@@ -628,12 +657,14 @@ final class Device {
 
     private AccessibilityNodeInfo find(JSONObject s) {
         boolean own = s.has("text") || s.has("id") || s.has("desc");
-        if (!own && !hasRelative(s)) {
-            throw new IllegalArgumentException("selector needs ref, x/y, text, id, desc, or below/above/leftOf/rightOf");
+        boolean nested = s.has("childOf") || s.has("containsChild");
+        if (!own && !hasRelative(s) && !nested) {
+            throw new IllegalArgumentException("selector needs ref, x/y, text, id, desc, below/above/leftOf/rightOf, childOf or containsChild");
         }
         List<AccessibilityNodeInfo> all = new ArrayList<>();
         for (Win w : windows()) flatten(w.root, all);
         if (hasRelative(s)) return findRelative(s, own, all);
+        if (!own) return smallestTappable(s, all);
         if (s.has("index")) return nth(s, all);
         AccessibilityNodeInfo partial = null;
         for (AccessibilityNodeInfo n : all) {
@@ -670,7 +701,7 @@ final class Device {
         List<AccessibilityNodeInfo> found = new ArrayList<>();
         List<double[]> rank = new ArrayList<>(); // {match, distance}
         for (AccessibilityNodeInfo n : all) {
-            int m = own ? match(n, s) : (n.isClickable() ? 2 : 0);
+            int m = own || n.isClickable() ? match(n, s) : 0;
             if (m == 0) continue;
             Rect b = new Rect();
             n.getBoundsInScreen(b);
@@ -762,7 +793,60 @@ final class Device {
         }
         if (s.has("text")) score = Math.min(score, textScore(n.getText(), n.getContentDescription(), s.optString("text")));
         if (s.has("desc")) score = Math.min(score, textScore(n.getContentDescription(), null, s.optString("desc")));
+        if (score == 0) return 0;
+        // States filter the match: {text: "Wi-Fi", checked: true}.
+        if (s.has("enabled") && n.isEnabled() != s.optBoolean("enabled")) return 0;
+        if (s.has("checked") && n.isChecked() != s.optBoolean("checked")) return 0;
+        if (s.has("selected") && n.isSelected() != s.optBoolean("selected")) return 0;
+        if (s.has("focused") && n.isFocused() != s.optBoolean("focused")) return 0;
+        if (s.has("childOf")) {
+            JSONObject p = nestedSel(s.opt("childOf"));
+            boolean inside = false;
+            for (AccessibilityNodeInfo a = n.getParent(); a != null && !inside; a = a.getParent()) inside = match(a, p) > 0;
+            if (!inside) return 0;
+        }
+        if (s.has("containsChild") && !hasDescendant(n, nestedSel(s.opt("containsChild")))) return 0;
         return score;
+    }
+
+    /** A childOf/containsChild value: "text" or a target object; it needs text, id or desc of its own. */
+    private static JSONObject nestedSel(Object v) {
+        try {
+            JSONObject o = anchorSel(v);
+            if (!o.has("text") && !o.has("id") && !o.has("desc")) throw new IllegalArgumentException("childOf/containsChild need text, id or desc");
+            return o;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("bad childOf/containsChild: " + e.getMessage());
+        }
+    }
+
+    private static boolean hasDescendant(AccessibilityNodeInfo n, JSONObject sel) {
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo c = n.getChild(i);
+            if (c == null) continue;
+            if (match(c, sel) > 0 || hasDescendant(c, sel)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Target with only childOf/containsChild: the smallest tappable element that satisfies them
+     * (its outer containers satisfy containsChild too); `index` counts in that order.
+     */
+    private static AccessibilityNodeInfo smallestTappable(JSONObject s, List<AccessibilityNodeInfo> all) {
+        List<AccessibilityNodeInfo> found = new ArrayList<>();
+        for (AccessibilityNodeInfo n : all) if (n.isClickable() && match(n, s) > 0) found.add(n);
+        found.sort((x, y) -> {
+            Rect a = new Rect(), b = new Rect();
+            x.getBoundsInScreen(a);
+            y.getBoundsInScreen(b);
+            long d = (long) a.width() * a.height() - (long) b.width() * b.height();
+            return d != 0 ? Long.signum(d) : a.top != b.top ? Integer.compare(a.top, b.top) : Integer.compare(a.left, b.left);
+        });
+        int idx = s.optInt("index", 0);
+        return idx >= 0 && idx < found.size() ? found.get(idx) : null;
     }
 
     /** "/A|B/" is a regex; cached since every node of every poll is checked against it. */
@@ -816,6 +900,15 @@ final class Device {
             if (s.has(k)) sb.append(sb.length() > 0 ? " " : "").append(k).append("=\"").append(s.optString(k)).append('"');
         }
         if (s.has("index")) sb.append(sb.length() > 0 ? " " : "").append("index ").append(s.optInt("index"));
+        for (String k : new String[]{"enabled", "checked", "selected", "focused"}) {
+            if (s.has(k)) sb.append(sb.length() > 0 ? " " : "").append(k).append('=').append(s.optBoolean(k));
+        }
+        for (String k : new String[]{"childOf", "containsChild"}) {
+            if (!s.has(k)) continue;
+            Object v = s.opt(k);
+            String a = v instanceof JSONObject ? describe((JSONObject) v) : "\"" + v + "\"";
+            sb.append(sb.length() > 0 ? " " : "").append(k).append(' ').append(a);
+        }
         for (String k : RELATIVE) {
             if (!s.has(k)) continue;
             Object v = s.opt(k);
@@ -978,7 +1071,7 @@ final class Device {
     private String type(JSONObject s) throws Exception {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
-        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "index", "below", "above", "leftOf", "rightOf"}) if (s.has(k)) sel.put(k, s.opt(k));
+        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "index", "below", "above", "leftOf", "rightOf", "enabled", "checked", "selected", "focused", "childOf", "containsChild"}) if (s.has(k)) sel.put(k, s.opt(k));
         if (s.has("field")) sel.put("text", s.optString("field"));
         if (sel.length() > (sel.has("wait") ? 1 : 0)) {
             tap(sel, false);
@@ -992,7 +1085,7 @@ final class Device {
             field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         }
         // Web fields sometimes never report input focus after a tap; focus the matched node.
-        if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc") || hasRelative(sel))) {
+        if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc") || hasRelative(sel) || sel.has("childOf") || sel.has("containsChild"))) {
             AccessibilityNodeInfo n = find(sel);
             if (n != null && n.isEditable()) {
                 n.performAction(AccessibilityNodeInfo.ACTION_FOCUS);

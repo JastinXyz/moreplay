@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
-import { executeSteps, RELATIVE_KEYS, saveScreenshot, screen, type ActDevice, type Step, type Subflows } from "./act.js";
+import { executeSteps, NESTED_KEYS, RELATIVE_KEYS, saveScreenshot, screen, type ActDevice, type Step, type Subflows } from "./act.js";
 import type { StepResult } from "./device.js";
 
 /**
@@ -41,7 +41,7 @@ const SHORT_KEY: Record<string, string> = {
 // Never worth replaying: they only look, and replays wait for elements on their own.
 const NOT_RECORDED = new Set(["observe", "apps", "wait_idle"]);
 const TARGETED = new Set(["tap", "long_press", "type"]);
-const SELECTOR_KEYS = ["ref", "x", "y", "text", "id", "desc", "field", ...RELATIVE_KEYS];
+const SELECTOR_KEYS = ["ref", "x", "y", "text", "id", "desc", "field", ...RELATIVE_KEYS, ...NESTED_KEYS];
 
 export const DEFAULT_WAIT_MS = 5000;
 

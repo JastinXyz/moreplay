@@ -86,6 +86,15 @@ are the typical case: `tap: {text: "1", below: "Enter your PIN"}`.
 `index: n` (0-based) picks the n-th match: in reading order (top to bottom, then left to right;
 exact matches if any, else contains), or with position keys in nearest-first order.
 
+States `enabled` / `checked` / `selected` / `focused: true|false` filter a match. `childOf: target`
+keeps elements inside a match of that target; `containsChild: target` keeps elements with a
+descendant that matches it (both targets need text, id or desc). With only childOf /
+containsChild and no text/id/desc, the target is the smallest tappable element that satisfies
+them, since every outer container contains the child too.
+
+`x`, `y` (tap, long_press, type) and `x1`..`y2` (swipe) take pixels or `"50%"` of the screen,
+measured as the union of every window the system lists.
+
 | op | params | where |
 |---|---|---|
 | observe | | agent |
@@ -277,7 +286,7 @@ ways (Maestro reads it from `-e var=...`).
 | run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: ...}` expressions are skipped, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
-selectors other than below/above/leftOf/rightOf/index (`childOf`, `containsChild`, ...), percent points, other `launchApp` options (`stopApp: false`, ...),
+selector keys `width` / `height` / `tolerance`, `traits`, `containsDescendants`, other `launchApp` options (`stopApp: false`, ...),
 scripts, `when: {true / platform}` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

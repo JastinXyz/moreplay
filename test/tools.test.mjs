@@ -17,7 +17,7 @@ test("exposes 4 tools and keeps their definitions small", async () => {
     assert.ok(shot.inputSchema.properties.refs, "screenshot takes refs for icon crops");
     // Tool definitions are re-sent with every request; a budget keeps them from creeping up.
     const chars = JSON.stringify(tools).length;
-    assert.ok(chars < 3600, `tool definitions grew to ${chars} chars (~${Math.round(chars / 4)} tokens)`);
+    assert.ok(chars < 3700, `tool definitions grew to ${chars} chars (~${Math.round(chars / 4)} tokens)`);
   } finally {
     await client.close();
   }
