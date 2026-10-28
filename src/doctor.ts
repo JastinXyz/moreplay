@@ -1,17 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { adbPath, Device, VERSION } from "./device.js";
+import { adbPath, Device, uiautomationHolders, VERSION } from "./device.js";
 
 const exec = promisify(execFile);
-
-// Processes that hold (or fight over) the single UiAutomation connection.
-const CONFLICTS: [RegExp, string][] = [
-  [/com\.mobilenext\.mobilecli\.DeviceServer/, "mobilecli / mobile-mcp device server"],
-  [/io\.appium\.uiautomator2/, "Appium UiAutomator2 server"],
-  [/dev\.mobile\.maestro/, "Maestro driver"],
-  [/com\.github\.uiautomator|com\.wetest\.uia2/, "uiautomator2 (openatx)"],
-  [/uiautomator (dump|runtest|events)/, "uiautomator command"],
-];
 
 const XIAOMI = /xiaomi|redmi|poco/i;
 
@@ -76,7 +67,7 @@ export async function doctor(): Promise<number> {
     sdk >= 33 ? undefined : "Below API 33 taps wait for animations to finish (~1 s each).");
 
   const ps = await device.shell("ps -A -o ARGS 2>/dev/null || ps");
-  const found = CONFLICTS.filter(([re]) => re.test(ps)).map(([, name]) => name);
+  const found = uiautomationHolders(ps);
   if (found.length) {
     report("fail", `UiAutomation is likely taken by: ${found.join(", ")}`, "Stop that tool first; only one UiAutomation client can run per device.");
   } else {
