@@ -64,3 +64,32 @@ Same device, agent at 0.1.0 after the covered-screen, icon and scroll changes. R
 
 Observe is a little slower than Spike 2's 21-55 ms (on the calculator) and screenshots
 slower than its 61-99 ms; the README uses these newer numbers. Taps were not re-measured.
+
+# Re-measure against the latest releases (2026-10-28)
+
+Same phone, home screen, read-only. Latest releases at the time: mobilecli 1.0.21 (17 Oct,
+the version Spike 2 measured) and mobile-mcp 1.0.14 (26 Oct).
+
+mobile-mcp 1.0.14 through an MCP client (`npx -y @mobilenext/mobile-mcp@1.0.14`), 4 calls each:
+
+| Call | Result |
+|---|---|
+| Tool definitions | 34 tools, 30,010 chars of JSON (~7.5k tokens) |
+| `mobile_list_elements_on_screen` | 4,695 ms first, then 1,612 / 2,355 / 2,465 ms; 14,334 chars (status bar included) |
+| `mobile_take_screenshot` | 561 ms first, then 338 / 303 / 302 ms; the JPEG comes back inline (63,138 base64 chars) |
+
+mobilecli 1.0.21 CLI (`npx -y mobilecli@1.0.21`, so each call also pays npx's lookup), 4 calls each:
+
+| Command | Result |
+|---|---|
+| `dump ui` | 8,608 ms first, then 3,608-3,753 ms; 122 KB JSON |
+| `snapshot` | 3,292-4,067 ms; 14.8 KB |
+| `screenshot --format jpeg` | 1,730 ms first, then 895-986 ms (to a file) |
+
+droidreplay for comparison (same day, `spike/bench.mjs`): observe 34-65 ms warm, 1.3 s cold;
+screenshot to a file 150-160 ms; tool definitions 3,397 chars (~850 tokens).
+
+mobilecli now runs its own app_process server with one UiAutomation, like droidreplay, but
+waits for the UI to settle (up to 2 s, `devices/android.go`) before each dump, which is where
+its read time goes. The README compares against mobile-mcp end to end, since that is what an
+MCP user runs; taps were not re-measured (the bench scripts are read-only).

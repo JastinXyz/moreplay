@@ -13,7 +13,7 @@ droidreplay is an [MCP](https://modelcontextprotocol.io) server: a plugin that g
 such as Claude Code, Claude Desktop or Cursor new tools. This one gives them an Android phone.
 
 - **Fast.** Reading the screen takes about 50 ms, not the usual 3 seconds.
-- **Cheap on tokens.** A screen is 1-2 KB of text, and the tools add only ~800 tokens to each request.
+- **Cheap on tokens.** A screen is 1-2 KB of text, and the tools add only ~850 tokens to each request.
 - **Record once, replay for free.** Save what the AI did as a small YAML file and run it again
   with one command, no AI needed. Handy for repeating manual tests.
 
@@ -184,29 +184,33 @@ What your AI app gets:
 
 ## How fast
 
-Reading the screen is **~60x faster** than `uiautomator dump` and mobilecli, screenshots are
-**~7x faster**, and the model reads **~10x less** per screen and per request.
+Reading the screen is **~40x faster** than mobile-mcp and **~70x faster** than `uiautomator
+dump`, and the model reads **~9x less**, both per screen and in tool definitions on every
+request.
 
-Measured on one phone (Android 14, HyperOS). droidreplay times are end to end from an MCP
-client on the laptop. Method and raw numbers: [`spike/RESULTS.md`](spike/RESULTS.md).
+Measured on one phone (Android 14, HyperOS), home screen, October 2026. Both MCP servers were
+timed end to end from an MCP client on the laptop. Method and raw numbers:
+[`spike/RESULTS.md`](spike/RESULTS.md).
 
 **Speed** (lower is better)
 
-| | droidreplay | mobilecli 1.0.21 | plain adb |
+| | droidreplay | mobile-mcp 1.0.14 | plain adb |
 |---|---|---|---|
-| Read the screen | **36-60 ms** | 2.2-3.3 s | 2.9-3.6 s |
-| First read (starts the agent) | **1-4 s** | 11 s | 2.9-3.6 s |
-| Tap x,y | **77-94 ms** | 115-309 ms | 184 ms |
-| Screenshot to file | **160-170 ms** | 0.8-1.2 s | 1.1-1.4 s |
+| Read the screen | **34-65 ms** | 1.6-2.5 s | 2.9-3.6 s |
+| First read (starts the agent) | **1.3-4 s** | 4.7 s | 2.9-3.6 s |
+| Tap x,y | **77-94 ms** | 115-309 ms¹ | 184 ms |
+| Screenshot | **150-170 ms** to a file | 0.3-0.6 s, sent to the model | 1.1-1.4 s to a file |
 
 **What the model reads**
 
-| | droidreplay | mobilecli 1.0.21 | plain adb |
+| | droidreplay | mobile-mcp 1.0.14 | plain adb |
 |---|---|---|---|
-| One screen as text | **1-2 KB** | 15-120 KB JSON | 54 KB XML |
-| Tool definitions, every request | **~800 tokens** (4 tools) | ~7k tokens (34 tools) | n/a |
+| One screen as text | **1-2 KB** | 14 KB | 54 KB XML |
+| Tool definitions, every request | **~850 tokens** (4 tools) | ~7.5k tokens (34 tools) | n/a |
+| A screenshot | **a file path** (the image only with `show: true`) | a ~47 KB JPEG every time | n/a |
 
-mobilecli is the device layer of [mobile-mcp](https://github.com/mobile-next/mobile-mcp). Plain
+¹ mobilecli 1.0.21, mobile-mcp's device layer, timed per CLI call. mobilecli also keeps an
+on-device server, but it waits for the screen to settle (up to 2 s) before every read. Plain
 adb means `uiautomator dump`, `input tap` and `screencap`.
 
 ## Troubleshooting
