@@ -253,3 +253,14 @@ test("logs: one app's lines by pid, folded repeats, the crash buffer when it is 
   assert.match(await runAct(fakeDevice(), [{ op: "logs", level: "loud" }], opts), /level must be one of V D I W E F/);
   assert.match(await runAct(fakeDevice(), [{ op: "logs", since: "yesterday" }], opts), /since must look like 30s/);
 });
+
+test("the tools that hold UiAutomation are named from a ps listing", async () => {
+  const { uiautomationHolders } = await import("../dist/device.js");
+  const ps = [
+    "app_process / com.genymobile.scrcpy.Server 5.0.1",
+    "app_process / com.mobilenext.mobilecli.DeviceServer --idle-timeout-ms=1800000",
+    "uiautomator dump /sdcard/u.xml",
+  ].join("\n");
+  assert.deepEqual(uiautomationHolders(ps), ["mobilecli's device server (mobile-mcp starts it again while a session runs)", "uiautomator command"]);
+  assert.deepEqual(uiautomationHolders("app_process / com.genymobile.scrcpy.Server"), []); // scrcpy does not use UiAutomation
+});

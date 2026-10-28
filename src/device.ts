@@ -19,6 +19,20 @@ const IMAGE_TIMEOUT_MS = 20_000;
 const INSTALL_TIMEOUT_MS = 300_000;
 const RUN_BASE_MS = 30_000;
 
+// Processes that hold (or fight over) the single UiAutomation connection.
+const UIAUTOMATION_HOLDERS: [RegExp, string][] = [
+  [/com\.mobilenext\.mobilecli\.DeviceServer/, "mobilecli's device server (mobile-mcp starts it again while a session runs)"],
+  [/io\.appium\.uiautomator2/, "Appium UiAutomator2 server"],
+  [/dev\.mobile\.maestro/, "Maestro driver"],
+  [/com\.github\.uiautomator|com\.wetest\.uia2/, "uiautomator2 (openatx)"],
+  [/uiautomator (dump|runtest|events)/, "uiautomator command"],
+];
+
+/** Names of the tools in a `ps -A -o ARGS` listing that hold UiAutomation. */
+export function uiautomationHolders(ps: string): string[] {
+  return UIAUTOMATION_HOLDERS.filter(([re]) => re.test(ps)).map(([, name]) => name);
+}
+
 /**
  * How long a batch may take on the device: the waits, timeouts and sleeps it asks for, plus
  * defaults for steps that wait on their own (wait_for/wait_gone/wait_idle 5 s, scroll 1.5 s a swipe).
@@ -194,6 +208,12 @@ export class Device {
       throw new Error(`agent on the device answered version ${answered}, expected ${VERSION}`);
     }
     const log = this.agentLog.trim().split("\n").slice(-6).join("\n");
+    // The usual reason is another automation tool on the device; say which, since the agent's
+    // own output is often just "Killed".
+    const holders = uiautomationHolders(await this.shell("ps -A -o ARGS 2>/dev/null; true").catch(() => ""));
+    if (holders.length) {
+      throw new Error(`another tool holds the UiAutomation connection: ${holders.join(", ")}. Stop it and retry.\n${log}`);
+    }
     if (/already registered|UiAutomationService/.test(log)) {
       throw new Error(
         "another tool holds the UiAutomation connection (Appium, Maestro, uiautomator2, mobilecli, `uiautomator dump`). Stop it and retry.\n" + log,
