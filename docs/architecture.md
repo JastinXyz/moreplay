@@ -80,7 +80,9 @@ Bound to 127.0.0.1 on the device; reached only through `adb forward`.
 Each step is `{"op": "...", ...}`. Targets for tap/long_press/type/wait_*:
 `ref` (from the latest observe) | `x`,`y` | `text` (text or content-desc, exact first, then
 contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. When the matched node
-is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
+is not clickable, the agent taps its nearest clickable ancestor. A selector tap reports what it
+hit: `tapped 540,886 "Order 1000" (partial match for "1")`; the partial note shows when the
+text only matched inside a longer label (the recorder still reads the coordinates first). Optional `wait` (ms) polls a
 text/id/desc target until it appears, is not covered (a splash screen or a sheet still on top) and is enabled (a submit button the app enables once it has handled the input; one still disabled at the timeout is tapped anyway, as in Maestro, and an explicit `enabled` selector is not waited on); replays set it on every targeted step. A coordinate tap has no element to wait for, so replays give it `settle` (3 s) instead: it waits until the screen stops changing (300 ms quiet), since a tap while a page still slides in lands on nothing. When the cover is another app's window, the error names it (`is behind a dialog from <package> ("...")`).
 
 Text (and desc) written `"/like this/"` is a regex, case-insensitive, compiled once per
@@ -115,7 +117,7 @@ measured as the union of every window the system lists.
 | scroll | `dir`, optional `until` (target, or plain text / `/regex/`; fails when not found by the end), `max` | agent (scroll action, swipe fallback) |
 | swipe | `x1,y1,x2,y2,ms` | agent |
 | key | back, home, enter, recents, delete, tab, or a keycode | agent |
-| wait_for / wait_gone | target, `timeout` | agent (polls every 40 ms) |
+| wait_for / wait_gone | target, `timeout` | agent (polls every 40 ms). wait_gone on a target that was never on screen passes with `not on screen (nothing to wait for)`, so a selector typo shows |
 | wait_idle | `quietMs`, `timeout` | agent (tree unchanged for quietMs) |
 | sleep | `ms` | agent |
 | hide_keyboard | | agent (back while the input-method window is listed, until it has stayed hidden for 400 ms, so a keyboard still sliding in after a tap on a field is caught too; at most one back per second, fails after 3 s) |
@@ -264,8 +266,10 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   launch and shows "Lanjut ke aplikasi" only after a countdown.
 - **Expressions**: `${...}` takes `NAME`, `NAME[n]` (one character, e.g. a PIN digit), `!!NAME`
   (set and not empty) and `NAME == 'x'` / `NAME != 'x'`. Anything else fails before the flow
-  runs rather than being half-understood. A plain `NAME` must be set; in the other forms a
-  missing var counts as empty. Maestro's `${...}` is JavaScript, so import keeps these forms and
+  runs rather than being half-understood. A plain `NAME` must be set and not empty (an empty
+  value is nearly always an env var that was never filled, passed as `--var X=`; typing it
+  would pass and fail later somewhere unrelated). In the other forms a missing or empty var
+  counts as empty, so `${!!NAME}` is how a flow tests for an optional one. Maestro's `${...}` is JavaScript, so import keeps these forms and
   anything richer fails at replay with a clear message.
 - **Subflows and conditions** (`run_flow`, a host op, so it splits the batch): `{file}` loads
   another flow file relative to the calling flow's folder (`.yaml` optional), `{steps}` runs an

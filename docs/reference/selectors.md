@@ -33,7 +33,8 @@ never a regex, so `Search...` means those characters.
 
 Watch out with short or numeric text. When no element has exactly that text yet (the calendar
 has not opened), the contains rule picks any label that includes it: `tap: "1"` can hit
-`Order 1000`. Anchor it (`"/^1$/"`), or `wait_for` something on the screen first.
+`Order 1000`. Anchor it (`"/^1$/"`), or `wait_for` something on the screen first. A tap reports what it hit,
+and says `(partial match for "1")` when that happened.
 
 ## Position: below, above, leftOf, rightOf
 

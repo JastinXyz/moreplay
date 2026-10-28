@@ -35,7 +35,9 @@ saved flow says `${pin}` too, even where the value itself was typed.
 ## Variables and expressions
 
 Pass values when replaying: `flow {action: run, name: login, vars: {pin: "482913"}}` or
-`moreplay run login --var pin=482913`. A missing var fails before anything runs.
+`moreplay run login --var pin=482913`. A missing or empty var fails before anything runs (an
+empty one is usually an env var that was never filled in). To make a var optional, test it with
+`${!!NAME}`: an empty value is fine there.
 
 | Form | Means |
 |---|---|

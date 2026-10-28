@@ -41,6 +41,9 @@ final class Device {
     private final Map<Integer, Ref> refs = new HashMap<>();
     // Stable selector of the element the current step acted on, reported so flows can be recorded.
     private JSONObject lastSel;
+    // What a selector tap hit, for its output: the element's label, and whether only a contains
+    // match was found ("1" hitting "Order 1000" before the screen with a plain "1" opened).
+    private String lastHit;
 
     /** What observe saw for one @ref: where to tap and how to find it again later. */
     private static final class Ref {
@@ -538,6 +541,7 @@ final class Device {
      * (ms), a text/id/desc selector is polled until it appears, which replays rely on.
      */
     private int[] point(JSONObject s) throws Exception {
+        lastHit = null;
         if (s.has("ref")) {
             Ref ref = refs.get(s.optInt("ref"));
             if (ref == null) throw new IllegalArgumentException("unknown ref @" + s.optInt("ref") + " (observe again)");
@@ -567,6 +571,7 @@ final class Device {
             r = target == null ? new Rect() : visibleRect(target);
         }
         if (n == null) throw new Missing("not found: " + describe(s));
+        lastHit = describeHit(n, s);
         lastSel = new JSONObject();
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
         for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
@@ -582,6 +587,19 @@ final class Device {
     /** Whether `t` is disabled while the selector does not ask about `enabled` itself. */
     private static boolean disabled(AccessibilityNodeInfo t, JSONObject s) {
         return t != null && !t.isEnabled() && !s.has("enabled");
+    }
+
+    /** `"label"`, plus `(partial match for "x")` when the selector's text only matched inside it. */
+    private static String describeHit(AccessibilityNodeInfo n, JSONObject s) {
+        CharSequence t = n.getText();
+        if (t == null || t.length() == 0) t = n.getContentDescription();
+        // Some apps wrap labels in invisible direction marks (U+202D around "7×6"); drop them.
+        String label = t == null ? "" : t.toString().replaceAll("[\u200E\u200F\u202A-\u202E\u2066-\u2069]", "").replace('\n', ' ').trim();
+        if (label.length() > 40) label = label.substring(0, 40) + "…";
+        String out = label.isEmpty() ? "" : "\"" + label + "\"";
+        String key = s.has("text") ? "text" : s.has("desc") ? "desc" : null;
+        if (key != null && match(n, s) == 1) out += (out.isEmpty() ? "" : " ") + "(partial match for \"" + s.optString(key) + "\")";
+        return out.isEmpty() ? null : out;
     }
 
     /** What a tap on `n` hits: its nearest clickable or editable ancestor (text sits on a child), else n. */
@@ -1013,7 +1031,7 @@ final class Device {
         if (longPress) SystemClock.sleep(s.optLong("ms", 700));
         ok &= touch(MotionEvent.ACTION_UP, down, SystemClock.uptimeMillis(), p[0], p[1], true);
         if (!ok) throw new IllegalStateException("inject failed (Xiaomi: enable 'USB debugging (Security settings)')");
-        return "tapped " + p[0] + "," + p[1];
+        return "tapped " + p[0] + "," + p[1] + (lastHit != null ? " " + lastHit : "");
     }
 
     private String swipe(int x1, int y1, int x2, int y2, int ms) {
@@ -1202,8 +1220,13 @@ final class Device {
         long timeout = s.optLong("timeout", 5000);
         long deadline = SystemClock.uptimeMillis() + timeout;
         long t0 = SystemClock.uptimeMillis();
+        boolean seen = false;
         while (true) {
             boolean present = find(s) != null;
+            seen |= present;
+            // wait_gone on something that was never there passes too, but says so: a selector
+            // with a typo (text where an id was meant) otherwise looks like a real wait.
+            if (gone && !present && !seen) return "not on screen (nothing to wait for)";
             if (present != gone) return (gone ? "gone" : "found") + " after " + (SystemClock.uptimeMillis() - t0) + "ms";
             if (SystemClock.uptimeMillis() > deadline) {
                 throw new Missing("timeout waiting for " + (gone ? "gone: " : "") + describe(s));
