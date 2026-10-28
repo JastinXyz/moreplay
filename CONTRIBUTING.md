@@ -19,7 +19,14 @@ npm run build
 - `npm run build` must pass (CI runs it).
 - Say which device and Android version you tested on. OEM differences are the main source of
   bugs, so reports from more devices are very welcome.
-- Update the docs in the same PR when behavior changes.
+- Update the docs in the same PR when behavior changes, and add a line under `[Unreleased]` in
+  `CHANGELOG.md` when users would notice the change.
+
+## Releases
+
+Maintainers release by merging a `chore(release): X.Y.Z` PR (version bump + changelog) and pushing
+the tag `vX.Y.Z`. The Release workflow publishes to npm with provenance and creates the GitHub
+release. Versions follow semver; in 0.x a minor bump may break things.
 
 ## Device etiquette
 

@@ -1,0 +1,45 @@
+name: Release
+
+# Pushing a tag like v0.2.0 publishes that version to npm and makes a GitHub release.
+# npm trusts this workflow through OIDC (trusted publishing): no token, no OTP.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # npm trusted publishing (and provenance)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      # Node 24 ships npm 11, which trusted publishing needs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches package.json
+        run: |
+          v=$(node -p 'require("./package.json").version')
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but package.json says $v"; exit 1; }
+      - run: npm ci
+      # ubuntu-latest ships an Android SDK at $ANDROID_HOME with platforms and build-tools.
+      - run: npm run build
+      - run: test -s assets/moreplay.jar
+      - run: npm test
+      # Versions with a hyphen (0.2.0-next.1) go to the `next` tag, not `latest`.
+      - run: npm publish --access public ${{ contains(github.ref_name, '-') && '--tag next' || '' }}
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          # This version's section of CHANGELOG.md, without its heading or the link lines at the end.
+          awk -v v="$v" '/^## /{p = index($0, "[" v "]") > 0; next} /^\[[^]]+\]: /{next} p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
+            ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}

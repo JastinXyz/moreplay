@@ -55,7 +55,8 @@ digging through git history. If a doc says something the code no longer does, fi
   `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;
   `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session (cwd `spike/`, so flows and
   evidence land in `spike/.moreplay/`; gitignored, as is `spike/evidence/` for e2e images).
-- `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
+- `.github/`: CI workflow, Release workflow (publishes on a `v*` tag), PR template, bug report
+  template. `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands
 
@@ -86,8 +87,19 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
   "Generated with" footer). Git identity is the repo's configured `JastinXyz`.
 - CI (`.github/workflows/ci.yml`) runs `npm run build` and `npm test` on every PR; keep it green.
 - New server logic gets a unit test with the fake device. Keep the tool-definition budget.
-- The repo is public (MIT) and published to npm as `moreplay` since 0.1.0 (2026-10-28). Releases:
-  bump `version` in `package.json` in a PR, merge, then the owner runs `npm publish` (2FA).
+- The repo is public (MIT) and published to npm as `moreplay` since 0.1.0 (2026-10-28). Merging to
+  `main` releases nothing; keep `main` releasable (CI green).
+- **Changelog:** a PR that changes what users see (behavior, CLI, tools, flow format) adds a line
+  under `## [Unreleased]` in `CHANGELOG.md`.
+- **Releases:** a PR `chore(release): X.Y.Z` bumps `version` in `package.json` (and the lock file)
+  and turns `[Unreleased]` into `## [X.Y.Z] - date` with a compare link. After the owner's OK and
+  the merge, ask before tagging, then `git tag vX.Y.Z && git push origin vX.Y.Z` on that commit:
+  `.github/workflows/release.yml` checks the tag matches `package.json`, builds, tests, publishes
+  to npm via trusted publishing (OIDC, no token or OTP) and makes the GitHub release from the
+  changelog section. `X.Y.Z-next.N` goes to the `next` npm tag as a prerelease.
+- **Semver in 0.x:** patch = fixes only; minor = features or anything that can break users. Breaking
+  means: flow YAML format, MCP tool names or parameters, CLI flags, the `.moreplay/` layout, minimum
+  Node or Android. Saved flows must keep working, or the changelog says how to update them.
 - **The test device is the owner's personal phone.** Ask before every device session, even if
   you used it earlier in the same conversation. Never tap near
   the status bar or quick settings, never type into apps that hold user data, and undo any
