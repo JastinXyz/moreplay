@@ -6,9 +6,10 @@ const HELP = `droidreplay ${VERSION}: fast Android MCP server
 Usage:
   droidreplay            run the MCP server on stdio (what MCP clients start)
   droidreplay doctor     check adb, the device and the agent, then exit
-  droidreplay run <flow> [--var key=value]... [--evidence dir]
-                         replay a flow (name in .droidreplay/flows or a .yaml path) without a model;
-                         exit code 0 when it passes, 1 when a step fails
+  droidreplay run <flow|folder>... [--var key=value]... [--evidence dir]
+                  [--include-tags a,b] [--exclude-tags c]
+                         replay flows (names in .droidreplay/flows, .yaml paths, or every
+                         .yaml in a folder) without a model; exit 0 when all pass, 1 otherwise
   droidreplay export <flow> [--app-id package] [--out file]
                          print a flow as Maestro YAML (steps with no counterpart go to stderr)
   droidreplay import <maestro.yaml> [--name flow-name] [--out file.yaml]

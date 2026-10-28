@@ -195,7 +195,7 @@ export function toMaestro(flow: FlowFile, appId?: string): Converted<string> {
     if (out) cmds.push(...out);
     else skipped.push(`step ${i + 1}: ${brief(toCompact(s))}`);
   });
-  const header = stringify({ appId: app, name: flow.name }, { lineWidth: 0 });
+  const header = stringify({ appId: app, name: flow.name, ...(flow.tags?.length ? { tags: flow.tags } : {}) }, { lineWidth: 0 });
   return { out: `${header}---\n${stringify(cmds, { lineWidth: 0 })}`, skipped };
 }
 
@@ -379,7 +379,9 @@ export function fromMaestro(text: string, name?: string): Converted<FlowFile> {
       skipped.push(`command ${i + 1}: ${brief(c)} (${(e as Error).message})`);
     }
   });
-  return { out: { name: name ?? String(header.name ?? "maestro"), steps: mergeErase(steps).map(toCompact) }, skipped };
+  const tags = Array.isArray(header.tags) ? header.tags.map(String) : undefined;
+  const flow: FlowFile = { name: name ?? String(header.name ?? "maestro"), ...(tags?.length ? { tags } : {}), steps: mergeErase(steps).map(toCompact) };
+  return { out: flow, skipped };
 }
 
 /** eraseText then inputText is one replacing type here. */

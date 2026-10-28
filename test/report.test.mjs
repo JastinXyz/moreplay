@@ -61,3 +61,12 @@ test("FORCE_COLOR=0 turns colors off, other values on; NO_COLOR wins", async () 
     for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
   }
 });
+
+test("suite summary: totals, skipped by tags, and the flows that failed", async () => {
+  const { suiteSummary } = await import("../dist/report.js");
+  assert.equal(
+    suiteSummary([{ name: "a.yaml", ok: true }, { name: "b.yaml", ok: false, failedStep: 3 }], 1, "9.5", false),
+    "\nFAIL  3 flows: 1 passed, 1 failed, 1 skipped by tags in 9.5 s\n  ✗ b.yaml (step 3)",
+  );
+  assert.equal(suiteSummary([{ name: "a.yaml", ok: true }, { name: "c.yaml", ok: true }], 0, "2.0", false), "\nPASS  2 flows: 2 passed in 2.0 s");
+});

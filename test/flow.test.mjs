@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAct } from "../dist/act.js";
 import {
-  flowName, fromCompact, hideVars, listFlows, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
+  collectFlows, flowName, fromCompact, hideVars, listFlows, pickByTags, loadFlow, patchSteps, Recorder, runFlow, saveFlow, substitute, toCompact, toRecorded, withWaits,
 } from "../dist/flow.js";
 
 /** Fake device that answers each step from `answer(step)`; records the batches it got. */
@@ -279,4 +279,28 @@ test("repeat: times, while checked before each round, a cap for while alone, inn
   const bad = fakeDevice((s) => (s.text === "B" ? { ok: false, error: "not found" } : { ok: true, out: "done" }));
   const failed = await runFlow(bad, { name: "f", steps: [{ repeat: { times: 2, steps: [{ tap: "A" }, { tap: "B" }] } }] }, { evidenceDir: tmpdir() });
   assert.match(failed.text, /round 1, step 2 \(tap\) failed: not found/);
+});
+
+test("a folder runs its top-level .yaml files by name; tags pick among them", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    await mkdir(join(dir, "suite", "shared"), { recursive: true });
+    for (const f of ["b-login.yaml", "a-open.yml", "notes.txt", "shared/pin.yaml"]) await writeFile(join(dir, "suite", f), "name: x\nsteps: []\n");
+    const flowsDir = join(dir, "flows");
+    const paths = await collectFlows([join(dir, "suite"), "solo"], flowsDir);
+    assert.deepEqual(paths, [join(dir, "suite", "a-open.yml"), join(dir, "suite", "b-login.yaml"), join(flowsDir, "solo.yaml")]);
+
+    const flows = [
+      { flow: { name: "open", tags: ["smoke"], steps: [] } },
+      { flow: { name: "login", tags: ["smoke", "slow"], steps: [] } },
+      { flow: { name: "pay", steps: [] } },
+    ];
+    const names = (r) => ({ run: r.run.map((f) => f.flow.name), skipped: r.skipped.map((f) => f.flow.name) });
+    assert.deepEqual(names(pickByTags(flows, [], [])), { run: ["open", "login", "pay"], skipped: [] });
+    assert.deepEqual(names(pickByTags(flows, ["smoke"], [])), { run: ["open", "login"], skipped: ["pay"] });
+    assert.deepEqual(names(pickByTags(flows, ["smoke"], ["slow"])), { run: ["open"], skipped: ["login", "pay"] });
+    assert.deepEqual(names(pickByTags(flows, [], ["slow"])), { run: ["open", "pay"], skipped: ["login"] });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
