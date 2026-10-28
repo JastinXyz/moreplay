@@ -1,6 +1,7 @@
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -87,7 +88,39 @@ function jarPath(): string {
 }
 
 /** One connected Android device plus the agent process running on it. */
+/**
+ * Who uses the device. Only one agent can hold it, and starting one stops any other, so:
+ * a `run` (moreplay run) marks the device as busy while it replays, and a `server` (the MCP
+ * server, doctor) refuses to take it from a run instead of silently killing it. A run still
+ * takes the device from an idle server, which starts its agent again on its next call.
+ */
+export type DeviceRole = "run" | "server";
+
+/** A lock file per device, holding the pid of the `moreplay run` that is using it. */
+export function runLockPath(serial: string): string {
+  return join(tmpdir(), `moreplay-run-${serial.replace(/[^\w.-]/g, "_")}.lock`);
+}
+
+/** The pid of a live `moreplay run` (other than this process) holding the device, if any. */
+export function runHolder(serial: string): number | undefined {
+  let pid: number;
+  try {
+    pid = Number(readFileSync(runLockPath(serial), "utf8").trim());
+  } catch {
+    return undefined;
+  }
+  if (!pid || pid === process.pid) return undefined;
+  try {
+    process.kill(pid, 0); // throws when no such process: a lock left by a killed run
+    return pid;
+  } catch {
+    return undefined;
+  }
+}
+
 export class Device {
+  constructor(private readonly role: DeviceRole = "server") {}
+
   private readonly adb = adbPath();
   private serial?: string;
   private port?: number;
@@ -177,6 +210,12 @@ export class Device {
 
   private async startAgent(): Promise<void> {
     const serial = await this.getSerial();
+    if (this.role === "run") {
+      writeFileSync(runLockPath(serial), String(process.pid));
+    } else {
+      const pid = runHolder(serial);
+      if (pid) throw new Error(`device busy: \`moreplay run\` (pid ${pid}) is replaying flows on it; try again when it finishes`);
+    }
     this.agent?.kill();
     // A leftover agent would still hold the single UiAutomation slot.
     // "[n]" keeps pkill from matching (and killing) the shell that runs it.
@@ -226,15 +265,35 @@ export class Device {
   async run(steps: object[], stopOnError = true, onResult?: (r: StepResult) => void): Promise<RunResult> {
     await this.ensureAgent();
     const budget = RUN_BASE_MS + stepBudget(steps);
-    const signal = AbortSignal.timeout(budget);
+    // Aborted by the time budget, or as soon as the agent dies mid-request (another moreplay
+    // process started its own, which stops ours, and our adb shell exits): no waiting it out.
+    const ctrl = new AbortController();
+    let why: "timeout" | "died" | undefined;
+    const timer = setTimeout(() => ((why ??= "timeout"), ctrl.abort()), budget);
+    const agent = this.agent;
+    const onExit = () => ((why ??= "died"), ctrl.abort());
+    agent?.once("exit", onExit);
     try {
-      return await this.request(steps, stopOnError, onResult, signal);
+      return await this.request(steps, stopOnError, onResult, ctrl.signal);
     } catch (e) {
-      if (!signal.aborted) throw e;
+      // The stream often breaks just before the adb shell's exit is seen: give it a moment.
+      if (!why && agent && agent.exitCode === null && agent.signalCode === null) {
+        await new Promise((r) => {
+          const t = setTimeout(r, 500);
+          agent.once("exit", () => (clearTimeout(t), r(undefined)));
+        });
+      }
+      if (why === "died" || (agent && (agent.exitCode !== null || agent.signalCode !== null))) {
+        throw new Error("the agent stopped in the middle of this request: another moreplay process (an MCP server, `moreplay run`) or another automation tool took the device");
+      }
+      if (why !== "timeout") throw e;
       // The agent is wedged; drop it so the next call starts a fresh one.
       this.agent?.kill();
       this.agent = undefined;
       throw new Error(`the agent did not answer within ${Math.round(budget / 1000)} s; it will be restarted on the next call`);
+    } finally {
+      clearTimeout(timer);
+      agent?.off("exit", onExit);
     }
   }
 
@@ -292,6 +351,13 @@ export class Device {
   stop(): void {
     this.agent?.kill();
     this.agent = undefined;
+    if (this.role === "run" && this.serial) {
+      try {
+        if (readFileSync(runLockPath(this.serial), "utf8").trim() === String(process.pid)) unlinkSync(runLockPath(this.serial));
+      } catch {
+        // No lock to remove.
+      }
+    }
     if (this.serial && this.port) {
       try {
         // Sync on purpose: this also runs from the process "exit" handler.

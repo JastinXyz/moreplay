@@ -20,7 +20,11 @@ moreplay run <flow|folder>... [--var key=value]... [--evidence dir]
 
 - A flow is a name in `.moreplay/flows/` or a `.yaml` path. A folder runs every `.yaml` directly
   in it, sorted by name (subfolders are for subflows).
-- Each step prints as it finishes. With more than one flow, a summary closes the run.
+- Each step prints as it finishes, including the steps inside `run_flow` and `repeat`
+  (indented). A step quiet for 15 s or more gets a `… still running` line. With more than one
+  flow, a summary closes the run.
+- While it runs, it marks the device as busy: an MCP server (or `doctor`) answers "device busy"
+  instead of taking the device from it.
 - `--include-tags` runs flows with any of those tags; `--exclude-tags` skips flows with any.
 - `--junit` writes a JUnit XML report for CI.
 - Exit code: 0 when every flow passed, 1 when one failed or none matched, 2 on bad usage.

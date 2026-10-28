@@ -1,5 +1,6 @@
 import type { Step } from "./act.js";
 import type { StepResult } from "./device.js";
+import { fromCompact } from "./flow.js";
 
 /**
  * Test-runner style output for `moreplay run`: one aligned line per step as it finishes,
@@ -154,6 +155,22 @@ export class Reporter {
         ? this.paint(rounds[1] === "0" ? "yellow" : "dim", `  ran ${rounds[1]}x`)
         : "";
     return `  ${this.paint("green", "✓")} ${label} ${this.paint(r.ms >= 1000 ? "yellow" : "dim", ms)}${note}`;
+  }
+
+  /**
+   * A step inside a run_flow / repeat, printed as it finishes, indented by depth. Its parent's
+   * own line follows once the whole block is done, so a long login shows its progress.
+   */
+  inner(raw: Record<string, unknown>, r: StepResult, depth: number): string {
+    let label: string;
+    try {
+      label = clip(describeStep(fromCompact(raw)));
+    } catch {
+      label = r.op;
+    }
+    const pad = "  ".repeat(depth + 1);
+    const mark = !r.ok ? this.paint("red", "✗") : /^skipped/.test(r.out ?? "") ? this.paint("yellow", "–") : this.paint("dim", "·");
+    return `${pad}${mark} ${this.paint("dim", `${label}  ${r.ms} ms`)}`;
   }
 
   /** Steps after a failure that never ran. */

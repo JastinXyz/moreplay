@@ -33,4 +33,4 @@ Screenshots are saved as files; use show:true only when you need the pixels, and
 
 Full reference: flow {action: "help", name: "steps" | "selectors" | "flows" | "cli"}. Read "selectors" before writing position (below/above/leftOf/rightOf) or nested selectors by hand, and "flows" before editing a flow file.
 
-Only one tool can control the phone's UI at a time. If moreplay says another tool holds it, ask the user to stop that tool.`;
+Only one tool can control the phone's UI at a time. If moreplay says another tool holds it, ask the user to stop that tool. While a \`moreplay run\` is replaying on the device, the tools answer "device busy": wait for the run to finish instead of retrying.`;

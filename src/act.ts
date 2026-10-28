@@ -59,6 +59,11 @@ export interface Subflows {
   /** Folder that relative subflow files resolve against. */
   dir: string;
   depth?: number;
+  /**
+   * Gets each step inside a run_flow / repeat as it finishes, as written (before vars are
+   * filled, so secrets stay out of the output), with how deep it is nested.
+   */
+  onInner?: (raw: Record<string, unknown>, result: StepResult, depth: number) => void;
 }
 
 // A flow that runs itself would never end.
@@ -92,7 +97,8 @@ async function runSubflow(device: ActDevice, step: Step, evidenceDir: string, su
   else throw new Error("run_flow needs file or steps");
   const vars = { ...sub.vars, ...((step.vars as Record<string, string> | undefined) ?? {}) };
   const steps = sub.prepare(raw, vars);
-  const exec = await executeSteps(device, steps, evidenceDir, undefined, { ...sub, vars, dir, depth: depth + 1 });
+  const inner = sub.onInner && ((r: StepResult, i: number) => sub.onInner!(raw[i], r, depth + 1));
+  const exec = await executeSteps(device, steps, evidenceDir, inner, { ...sub, vars, dir, depth: depth + 1 });
   if (exec.failedAt !== undefined) {
     const o = exec.outcomes[exec.failedAt];
     throw new Error(`step ${exec.failedAt + 1} (${o.step.op}) failed: ${o.result.error ?? ""}`);
@@ -113,8 +119,11 @@ async function runRepeat(device: ActDevice, step: Step, evidenceDir: string, sub
   let n = 0;
   for (; n < limit; n++) {
     if (step.while !== undefined && !(await conditionMet(device, step.while))) break;
-    const steps = sub.prepare(step.steps as Record<string, unknown>[], sub.vars);
-    const exec = await executeSteps(device, steps, evidenceDir, undefined, { ...sub, depth: (sub.depth ?? 0) + 1 });
+    const raw = step.steps as Record<string, unknown>[];
+    const steps = sub.prepare(raw, sub.vars);
+    const depth = (sub.depth ?? 0) + 1;
+    const inner = sub.onInner && ((r: StepResult, i: number) => sub.onInner!(raw[i], r, depth));
+    const exec = await executeSteps(device, steps, evidenceDir, inner, { ...sub, depth });
     if (exec.failedAt !== undefined) {
       const o = exec.outcomes[exec.failedAt];
       throw new Error(`round ${n + 1}, step ${exec.failedAt + 1} (${o.step.op}) failed: ${o.result.error ?? ""}`);

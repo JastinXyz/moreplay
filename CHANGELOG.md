@@ -5,6 +5,14 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- `moreplay run` prints the steps inside `run_flow` and `repeat` as they finish (indented), and
+  `… still running (N s ...)` when nothing has printed for 15 s. A whole subflow used to be one
+  silent line, which looked like a hang during a long wait.
+- While `moreplay run` replays, the MCP server and `doctor` answer "device busy" instead of
+  taking the device and silently stopping the run's agent.
+- A request whose agent dies midway fails at once ("the agent stopped in the middle of this
+  request ...") instead of waiting out its whole time budget.
+
 - `type {field}` finds filled fields too (by hint), and fields by the label right above them.
   It used to fail with "no focused text field" once a field had a value.
 - A selector tap closes the keyboard first when the target is not a field, so apps that spend
