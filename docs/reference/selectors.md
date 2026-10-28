@@ -76,6 +76,8 @@ waits for it like for any target.
 ## Waiting
 
 In replays (`flow run`, `moreplay run`) every targeted step waits up to 5 s for its element to
-show up, not be covered (a splash screen, a sheet still on top) and be enabled. A coordinate tap
-waits for the screen to stop moving instead. In `act`, steps after the first wait 3 s. Set
+show up, not be covered (a splash screen, a sheet still on top) and be enabled. A tap also
+closes the keyboard first when the target is not a field (some apps ignore the first tap while
+it is up), and waits for the target to stop moving. A coordinate tap
+waits for the screen to stop moving instead. In `act`, steps after the first wait 3 s, the first one 1 s. Set
 `wait: ms` on a step to change it, and `optional: true` to skip a step whose element never shows.

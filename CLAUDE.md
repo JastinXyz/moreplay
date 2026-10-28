@@ -156,6 +156,10 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
   It now waits until the keyboard has stayed hidden for 400 ms.
 - `am start` returns before the new activity is in front: a `wait_for` right after `launch` matched
   text on the previous app's screen. `launch` uses `am start -W`.
+- Selector taps close the keyboard first and wait for a still target (`point()` in Device.java).
+  Both came from real sessions: React Native ate the first tap on a search result while the
+  keyboard was up, and a dropdown closing above a field moved it under the tap. The stability
+  check refreshes only the target node; a full `find()` per poll made each tap ~0.5 s slower.
 - `scroll {until: "Text"}` (a string) was silently ignored by the agent, so the step scrolled once
   and passed without checking. Short forms must be handled wherever a selector is read.
 - Xiaomi/HyperOS needs "USB debugging (Security settings)" for input injection (the owner's
