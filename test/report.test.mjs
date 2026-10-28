@@ -37,3 +37,24 @@ test("color output wraps marks and badges in ANSI codes", () => {
   assert.match(rep.step(0, { op: "tap", ok: true, ms: 5, out: "ok" }), /\x1b\[32m✓\x1b\[0m/);
   assert.match(rep.footer(true, "0.1"), /\x1b\[30;42m PASS \x1b\[0m/);
 });
+
+test("FORCE_COLOR=0 turns colors off, other values on; NO_COLOR wins", async () => {
+  const { useColor } = await import("../dist/report.js");
+  const saved = { FORCE_COLOR: process.env.FORCE_COLOR, NO_COLOR: process.env.NO_COLOR };
+  const tty = { isTTY: true };
+  try {
+    delete process.env.NO_COLOR;
+    for (const [v, want] of [["0", false], ["false", false], ["1", true], ["3", true]]) {
+      process.env.FORCE_COLOR = v;
+      assert.equal(useColor({ isTTY: false }), want, `FORCE_COLOR=${v}`);
+    }
+    delete process.env.FORCE_COLOR;
+    assert.equal(useColor(tty), true);
+    assert.equal(useColor({ isTTY: false }), false);
+    process.env.NO_COLOR = "1";
+    process.env.FORCE_COLOR = "1";
+    assert.equal(useColor(tty), false);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+});

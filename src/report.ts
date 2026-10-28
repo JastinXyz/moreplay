@@ -7,7 +7,9 @@ import type { StepResult } from "./device.js";
  */
 export function useColor(stream: NodeJS.WriteStream): boolean {
   if (process.env.NO_COLOR) return false;
-  if (process.env.FORCE_COLOR) return true;
+  // FORCE_COLOR=0 / false turns colors off, as in Node and chalk; any other value turns them on.
+  const force = process.env.FORCE_COLOR;
+  if (force !== undefined && force !== "") return force !== "0" && force !== "false";
   return !!stream.isTTY;
 }
 
