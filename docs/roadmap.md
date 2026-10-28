@@ -27,6 +27,19 @@ Status as of the latest merged PR. Move items to Done when they land.
 - [x] Self-heal: on a broken step, return the step + screen so the model can patch the flow
 - [x] Maestro YAML export/import (`droidreplay export` / `import`, CLI only)
 
+## Maestro parity: real suites as droidreplay flows
+
+What it takes for a team's existing Maestro suite (logins with a PIN keypad, sessions that may
+or may not be kept, dev-build overlays) to be imported or recorded and replayed by droidreplay.
+
+- [x] Secrets stay out of recorded flows: `flow record{vars}`, values saved back as `${var}`
+- [x] `clear_app` (Maestro `clearState`) to start from a fresh install state
+- [x] Position selectors `below` / `above` / `leftOf` / `rightOf`, also for unlabeled icons
+- [x] Regex text (`"/A|B/"`), for waits on one of several screens and partly known text
+- [ ] Conditional steps (`when: visible / not visible`) for screens that only sometimes appear
+- [ ] Subflows with parameters (`run_flow{file, vars}`), e.g. a shared PIN keypad flow
+- [ ] `repeat while visible`, `hide_keyboard`, `index` selector, tags to include/exclude flows
+
 ## Quality
 
 - [x] Faster scroll (directional scroll actions, end-of-list detection), ~2x faster per scroll

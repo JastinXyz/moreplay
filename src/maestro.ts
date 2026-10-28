@@ -22,15 +22,36 @@ const KEY_FROM_MAESTRO: Record<string, string> = { home: "home", enter: "enter",
 
 const brief = (v: unknown) => JSON.stringify(v);
 
+// Maestro reads every text as a regex; droidreplay only when written "/like this/".
+// ${var} placeholders are neither escaped nor counted as regex.
+const PLACEHOLDER = /(\$\{\w+\})/;
+const REGEX_CHARS = /[|*+?()[\]{}^$\\]/;
+
+/** droidreplay text -> Maestro text: "/re/" as is, plain text escaped so Maestro matches it literally. */
+function maestroText(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  if (v.length > 2 && v.startsWith("/") && v.endsWith("/")) return v.slice(1, -1);
+  return v
+    .split(PLACEHOLDER)
+    .map((part, i) => (i % 2 ? part : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+}
+
+/** Maestro text -> droidreplay text: "/.../" when it uses regex beyond "." (a lone "." is usually just a dot). */
+function ourText(v: string): string {
+  const bare = v.split(PLACEHOLDER).filter((_, i) => i % 2 === 0).join("");
+  return REGEX_CHARS.test(bare) ? `/${v}/` : v;
+}
+
 /** droidreplay target -> Maestro selector; null for refs, which only exist in one session. */
 function toSelector(s: Record<string, unknown>): Record<string, unknown> | null {
   if ("ref" in s) return null;
   const sel: Record<string, unknown> = {};
   if ("x" in s && "y" in s) sel.point = `${s.x},${s.y}`;
   // Maestro's text matches content-desc too.
-  if ("text" in s) sel.text = s.text;
-  else if ("desc" in s) sel.text = s.desc;
-  else if ("field" in s) sel.text = s.field;
+  if ("text" in s) sel.text = maestroText(s.text);
+  else if ("desc" in s) sel.text = maestroText(s.desc);
+  else if ("field" in s) sel.text = maestroText(s.field);
   if ("id" in s) sel.id = s.id;
   // Same names on both sides; an anchor is plain text or a selector of its own.
   for (const k of RELATIVE_KEYS) {
@@ -40,7 +61,7 @@ function toSelector(s: Record<string, unknown>): Record<string, unknown> | null 
       const inner = toSelector(a as Record<string, unknown>);
       if (!inner) return null;
       sel[k] = inner;
-    } else sel[k] = a;
+    } else sel[k] = maestroText(a);
   }
   return sel;
 }
@@ -137,11 +158,12 @@ const IGNORED_KEYS = new Set(["label", "retryTapIfNoChange", "waitToSettleTimeou
 
 /** Maestro selector -> droidreplay target, or a reason it has no counterpart. */
 function fromSelector(v: unknown): Record<string, unknown> | string {
-  if (typeof v === "string" || typeof v === "number") return { text: String(v) };
+  if (typeof v === "string" || typeof v === "number") return { text: ourText(String(v)) };
   if (!v || typeof v !== "object") return "empty selector";
   const out: Record<string, unknown> = {};
   for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-    if (k === "text" || k === "id") out[k] = String(x);
+    if (k === "text") out.text = ourText(String(x));
+    else if (k === "id") out.id = String(x);
     else if (k === "optional") out.optional = x === true;
     else if (k === "point") {
       const m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(String(x));

@@ -721,7 +721,40 @@ final class Device {
         return score;
     }
 
+    /** "/A|B/" is a regex; cached since every node of every poll is checked against it. */
+    private static final Map<String, java.util.regex.Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static boolean isRegex(String want) {
+        return want.length() > 2 && want.startsWith("/") && want.endsWith("/");
+    }
+
+    private static java.util.regex.Pattern pattern(String want) {
+        java.util.regex.Pattern p = PATTERNS.get(want);
+        if (p == null) {
+            try {
+                p = java.util.regex.Pattern.compile(want.substring(1, want.length() - 1),
+                        java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE | java.util.regex.Pattern.DOTALL);
+            } catch (java.util.regex.PatternSyntaxException e) {
+                throw new IllegalArgumentException("bad regex " + want + ": " + e.getDescription());
+            }
+            PATTERNS.put(want, p);
+        }
+        return p;
+    }
+
     private static int textScore(CharSequence a, CharSequence b, String want) {
+        if (isRegex(want.trim())) {
+            // Like exact vs contains: the whole text matching beats a match inside it.
+            java.util.regex.Pattern p = pattern(want.trim());
+            int best = 0;
+            for (CharSequence cs : new CharSequence[]{a, b}) {
+                if (cs == null) continue;
+                java.util.regex.Matcher m = p.matcher(cs.toString().trim());
+                if (m.matches()) return 2;
+                if (m.find()) best = 1;
+            }
+            return best;
+        }
         String w = want.trim().toLowerCase(Locale.ROOT);
         int best = 0;
         for (CharSequence cs : new CharSequence[]{a, b}) {
