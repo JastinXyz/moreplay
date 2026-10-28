@@ -30,7 +30,7 @@ digging through git history. If a doc says something the code no longer does, fi
   - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
     agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
   - `run-cli.ts`: `droidreplay run <flow|folder>... [--var k=v] [--evidence dir] [--include-tags]
-    [--exclude-tags]` (replay with no model, exit 0/1; a folder = its top-level .yaml files, run
+    [--exclude-tags] [--junit file]` (replay with no model, exit 0/1; a folder = its top-level .yaml files, run
     one after another on one agent, then a suite summary). Prints each step live via the
     agent's streamed `/run`.
   - `report.ts`: test-runner style output for `run` (aligned ✓/✗ lines, PASS/FAIL badge;

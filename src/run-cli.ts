@@ -1,11 +1,12 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { Device } from "./device.js";
 import { collectFlows, EVIDENCE_DIR, FLOWS_DIR, fromCompact, loadFlow, pickByTags, runFlow, type FlowFile } from "./flow.js";
-import { Reporter, suiteSummary, useColor } from "./report.js";
+import { junitXml, Reporter, suiteSummary, useColor, type FlowReport } from "./report.js";
 
 const USAGE =
   "usage: droidreplay run <flow name, .yaml path or folder>... [--var key=value]... [--evidence dir]\n" +
-  "                       [--include-tags a,b] [--exclude-tags c]";
+  "                       [--include-tags a,b] [--exclude-tags c] [--junit report.xml]";
 
 const tagList = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
 
@@ -20,6 +21,7 @@ export async function runCli(args: string[]): Promise<number> {
   let evidenceDir = resolve(EVIDENCE_DIR);
   let include: string[] = [];
   let exclude: string[] = [];
+  let junit: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--var") {
@@ -30,7 +32,7 @@ export async function runCli(args: string[]): Promise<number> {
         return 2;
       }
       vars[kv.slice(0, eq)] = kv.slice(eq + 1);
-    } else if (a === "--evidence" || a === "--include-tags" || a === "--exclude-tags") {
+    } else if (a === "--evidence" || a === "--include-tags" || a === "--exclude-tags" || a === "--junit") {
       const v = args[++i];
       if (!v) {
         console.error(`${a} needs a value`);
@@ -38,6 +40,7 @@ export async function runCli(args: string[]): Promise<number> {
       }
       if (a === "--evidence") evidenceDir = resolve(v);
       else if (a === "--include-tags") include = tagList(v);
+      else if (a === "--junit") junit = resolve(v);
       else exclude = tagList(v);
     } else if (a.startsWith("--")) {
       console.error(`unknown option: ${a}`);
@@ -69,7 +72,7 @@ export async function runCli(args: string[]): Promise<number> {
 
   const device = new Device();
   const t0 = Date.now();
-  const results: { name: string; ok: boolean; failedStep?: number }[] = [];
+  const results: FlowReport[] = [];
   try {
     for (const { path, flow } of run) {
       // Labels come from the flow as written, so ${secrets} are not printed.
@@ -82,16 +85,33 @@ export async function runCli(args: string[]): Promise<number> {
         if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
         const evidence = result.shots ? near(result.evidenceDir) : undefined;
         console.log(rep.footer(result.ok, result.secs, { failedStep: result.failedStep, evidence }));
-        results.push({ name: near(path), ok: result.ok, failedStep: result.failedStep });
+        results.push({
+          file: near(path),
+          name: flow.name,
+          ok: result.ok,
+          secs: Number(result.secs),
+          failedStep: result.failedStep,
+          error: result.error,
+          crash: result.crash,
+          artifacts: result.artifacts?.map(near),
+        });
       } catch (e) {
         // A flow that cannot start (a missing ${var}, no device) fails; the rest still run.
         console.log(`  ${(e as Error).message}`);
-        results.push({ name: near(path), ok: false });
+        results.push({ file: near(path), name: flow.name, ok: false, secs: 0, error: (e as Error).message });
       }
     }
   } finally {
     device.stop();
   }
-  if (run.length > 1 || skipped.length) console.log(suiteSummary(results, skipped.length, ((Date.now() - t0) / 1000).toFixed(1), color));
+  const secs = (Date.now() - t0) / 1000;
+  if (run.length > 1 || skipped.length) {
+    console.log(suiteSummary(results.map((r) => ({ name: r.file, ok: r.ok, failedStep: r.failedStep })), skipped.length, secs.toFixed(1), color));
+  }
+  if (junit) {
+    await mkdir(dirname(junit), { recursive: true });
+    await writeFile(junit, junitXml(results, skipped.map((f) => ({ file: near(f.path), name: f.flow.name })), secs));
+    console.log(`JUnit  ${near(junit)}`);
+  }
   return results.every((r) => r.ok) ? 0 : 1;
 }

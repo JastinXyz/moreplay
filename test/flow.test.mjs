@@ -304,3 +304,19 @@ test("a folder runs its top-level .yaml files by name; tags pick among them", as
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("a failed flow saves a screenshot and the screen as text next to its evidence", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    const d = fakeDevice((s) => (s.text === "B" ? { ok: false, error: "not found" } : { ok: true, out: "done" }));
+    const run = await runFlow(d, { name: "art", steps: [{ tap: "A" }, { tap: "B" }] }, { evidenceDir: dir });
+    assert.equal(run.failedStep, 2);
+    assert.equal(run.error, "not found");
+    assert.deepEqual(run.artifacts.map((p) => p.slice(run.evidenceDir.length + 1)), ["failed-step-2.jpg", "failed-step-2.txt"]);
+    assert.equal(await readFile(run.artifacts[1], "utf8"), "app=x\n");
+    assert.match(run.text, /failure artifacts: .*failed-step-2\.jpg/);
+    assert.ok(run.shots);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
