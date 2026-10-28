@@ -321,6 +321,17 @@ async function recentCrash(device: ActDevice, secs: number): Promise<string | un
   }
 }
 
+// clear_app waits at least this long after pm clear (Android revoked a grant ~1 s later on
+// Android 14), then up to CLEAR_SETTLE_MS more for the runtime grants to drop.
+const CLEAR_MIN_SETTLE_MS = 1500;
+const CLEAR_SETTLE_MS = 3000;
+
+/** Runtime permissions still granted for the first user listed in `dumpsys package <pkg>`. */
+export function runtimeGranted(dump: string): number {
+  const block = /runtime permissions:\n((?:[ \t]+[\w.]+: granted=.*\n?)+)/.exec(dump)?.[1] ?? "";
+  return (block.match(/granted=true/g) ?? []).length;
+}
+
 /** Single-quotes a value for `adb shell`. */
 const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
@@ -426,6 +437,14 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
         (e: Error) => e.message.trim().split("\n").pop() ?? "",
       );
       if (out !== "Success") throw new Error(`pm clear ${pkg}: ${out || "no answer"}`);
+      // pm answers before its permission reset is done: a grant made right after (e.g. a flow's
+      // permissions step) is revoked again under a second later, even when nothing was granted
+      // before. Wait a fixed moment, then until no runtime permission is still granted.
+      await new Promise((r) => setTimeout(r, CLEAR_MIN_SETTLE_MS));
+      const deadline = Date.now() + CLEAR_SETTLE_MS;
+      while (Date.now() < deadline && runtimeGranted(await device.shell(`dumpsys package ${pkg}`)) > 0) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
       return `cleared ${pkg}`;
     }
     case "apps": {

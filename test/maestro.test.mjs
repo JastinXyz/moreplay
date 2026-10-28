@@ -96,6 +96,7 @@ name: login
 `);
   assert.equal(out.name, "login");
   assert.deepEqual(out.steps, [
+    { permissions: { package: "com.app", grant: "all" } }, // Maestro grants all on launchApp
     { launch: "com.app" },
     { tap: "Masuk" },
     { tap: { id: "close", optional: true } },
@@ -125,7 +126,8 @@ test("export then import keeps the flow", () => {
     name: "roundtrip",
     steps: [{ launch: "com.app" }, { tap: "Masuk" }, { type: "a" }, { key: "back" }, { wait_gone: "Memuat" }, { screenshot: "done" }],
   };
-  assert.deepEqual(fromMaestro(toMaestro(flow).out).out, flow);
+  // launchApp comes back with Maestro's default grant in front of it.
+  assert.deepEqual(fromMaestro(toMaestro(flow).out).out, { ...flow, steps: [{ permissions: { package: "com.app", grant: "all" } }, ...flow.steps] });
 });
 
 test("import and export CLIs", async () => {
@@ -135,7 +137,7 @@ test("import and export CLIs", async () => {
     const src = join(dir, "maestro-login.yaml");
     await writeFile(src, "appId: com.app\n---\n- launchApp\n- tapOn: Masuk\n- evalScript: x\n");
     const imp = await run("import", src, "--name", "login");
-    assert.match(imp.stdout, /saved .*login\.yaml \(2 steps\)/);
+    assert.match(imp.stdout, /saved .*login\.yaml \(3 steps\)/);
     assert.match(imp.stderr, /evalScript/);
     assert.match(await readFile(join(dir, ".droidreplay", "flows", "login.yaml"), "utf8"), /tap: Masuk/);
     const out = await run("import", src, "--out", "elsewhere/login.yaml");
@@ -154,7 +156,7 @@ test("clear_app maps to clearState, and launchApp clearState to clear_app + laun
   const [, cmds] = commands(toMaestro({ name: "x", steps: [{ clear_app: "com.app" }, { launch: "com.app" }, { clear_app: "com.other" }] }).out);
   assert.deepEqual(cmds, ["clearState", "launchApp", { clearState: "com.other" }]);
   const { out, skipped } = fromMaestro("appId: com.app\n---\n- launchApp:\n    clearState: true\n- clearState\n- clearState: com.other\n");
-  assert.deepEqual(out.steps, [{ clear_app: "com.app" }, { launch: "com.app" }, { clear_app: "com.app" }, { clear_app: "com.other" }]);
+  assert.deepEqual(out.steps, [{ clear_app: "com.app" }, { permissions: { package: "com.app", grant: "all" } }, { launch: "com.app" }, { clear_app: "com.app" }, { clear_app: "com.other" }]);
   assert.deepEqual(skipped, []);
 });
 
@@ -291,7 +293,7 @@ test("repeat and hideKeyboard map both ways", () => {
 
 test("Maestro header tags become flow tags and back", () => {
   const { out } = fromMaestro("appId: com.app\ntags:\n  - smoke\n  - v3\n---\n- launchApp\n");
-  assert.deepEqual(out, { name: "maestro", tags: ["smoke", "v3"], steps: [{ launch: "com.app" }] });
+  assert.deepEqual(out, { name: "maestro", tags: ["smoke", "v3"], steps: [{ permissions: { package: "com.app", grant: "all" } }, { launch: "com.app" }] });
   const [header] = commands(toMaestro(out).out);
   assert.deepEqual(header, { appId: "com.app", name: "maestro", tags: ["smoke", "v3"] });
 });

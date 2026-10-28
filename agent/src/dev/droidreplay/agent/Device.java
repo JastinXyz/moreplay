@@ -210,6 +210,7 @@ final class Device {
     }
 
     private boolean keyboardShown;
+    private static final long KEYBOARD_QUIET_MS = 400;
 
     /**
      * Windows a user can act on, top-most first: app windows (activities, dialogs, popups,
@@ -540,15 +541,22 @@ final class Device {
             return new int[]{ref.x, ref.y};
         }
         if (s.has("x") && s.has("y")) return new int[]{coord(s, "x", true), coord(s, "y", false)};
-        AccessibilityNodeInfo n = find(s);
         long wait = s.optLong("wait", 0);
         long deadline = SystemClock.uptimeMillis() + wait;
-        while (n == null && SystemClock.uptimeMillis() < deadline) {
+        AccessibilityNodeInfo n = find(s);
+        AccessibilityNodeInfo target = tapTarget(n);
+        Rect r = target == null ? new Rect() : visibleRect(target);
+        // Not there yet, still covered (a splash screen or a sheet sliding away), or still
+        // disabled (a submit button the app enables once it has processed the input just typed):
+        // all wait out the step's `wait`. A target still disabled then is tapped anyway, as Maestro does.
+        while ((n == null || r.isEmpty() || disabled(target, s)) && SystemClock.uptimeMillis() < deadline) {
             // Time spent on a popup does not count against the step's own wait.
             if (dismissAny(s)) deadline = SystemClock.uptimeMillis() + wait;
             else SystemClock.sleep(POLL_MS);
             clearCacheEvery(CLEAR_EVERY_MS);
             n = find(s);
+            target = tapTarget(n);
+            r = target == null ? new Rect() : visibleRect(target);
         }
         if (n == null) throw new Missing("not found: " + describe(s));
         lastSel = new JSONObject();
@@ -556,13 +564,47 @@ final class Device {
         for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
         if (s.has("index")) lastSel.put("index", s.optInt("index"));
         for (String k : new String[]{"enabled", "checked", "selected", "focused", "childOf", "containsChild"}) if (s.has(k)) lastSel.put(k, s.opt(k));
-        AccessibilityNodeInfo target = n;
-        // Text usually sits on a child of the thing that is actually clickable.
-        while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
-        if (target == null) target = n;
-        Rect r = visibleRect(target);
-        if (r.isEmpty()) throw new Missing(describe(s) + " is covered by another element (scroll it into view)");
+        if (r.isEmpty()) {
+            String front = frontDialog(target);
+            throw new Missing(describe(s) + (front != null ? " is behind " + front + " (handle it first)" : " is covered by another element (scroll it into view)"));
+        }
         return new int[]{r.centerX(), r.centerY()};
+    }
+
+    /** Whether `t` is disabled while the selector does not ask about `enabled` itself. */
+    private static boolean disabled(AccessibilityNodeInfo t, JSONObject s) {
+        return t != null && !t.isEnabled() && !s.has("enabled");
+    }
+
+    /** What a tap on `n` hits: its nearest clickable or editable ancestor (text sits on a child), else n. */
+    private static AccessibilityNodeInfo tapTarget(AccessibilityNodeInfo n) {
+        AccessibilityNodeInfo t = n;
+        while (t != null && !t.isClickable() && !t.isEditable()) t = t.getParent();
+        return t != null ? t : n;
+    }
+
+    /**
+     * When another app's window sits in front of `n`'s (a permission prompt, a system dialog):
+     * "a dialog from <package> ("<its first text>")", else null.
+     */
+    private String frontDialog(AccessibilityNodeInfo n) {
+        List<Win> ws = windows();
+        if (ws.isEmpty() || n.getPackageName() == null) return null;
+        AccessibilityNodeInfo top = ws.get(0).root;
+        CharSequence pkg = top.getPackageName();
+        if (pkg == null || pkg.toString().equals(n.getPackageName().toString())) return null;
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        flatten(top, all);
+        String text = null;
+        for (AccessibilityNodeInfo x : all) {
+            CharSequence t = x.getText() != null ? x.getText() : x.getContentDescription();
+            if (t != null && t.toString().trim().length() > 0) {
+                text = t.toString().trim();
+                break;
+            }
+        }
+        if (text != null && text.length() > 80) text = text.substring(0, 79) + "…";
+        return "a dialog from " + pkg + (text != null ? " (\"" + text + "\")" : "");
     }
 
     /**
@@ -753,15 +795,32 @@ final class Device {
     }
 
     /** Back closes the keyboard; waits until the system no longer lists its window. */
+    /**
+     * Presses back while the keyboard shows, until it has stayed hidden for KEYBOARD_QUIET_MS. A
+     * keyboard still sliding in after a tap on a field is not listed yet: returning at once let it
+     * appear afterwards, and the next tap only closed it (React Native's default for a ScrollView).
+     */
     private String hideKeyboard() {
-        windows();
-        if (!keyboardShown) return "keyboard already hidden";
-        key("back");
-        long deadline = SystemClock.uptimeMillis() + 1500;
-        while (SystemClock.uptimeMillis() < deadline) {
-            SystemClock.sleep(POLL_MS);
+        long now = SystemClock.uptimeMillis();
+        long deadline = now + 3000, hiddenSince = now, backAt = 0;
+        boolean pressed = false;
+        while (now < deadline) {
             windows();
-            if (!keyboardShown) return "hidden";
+            if (keyboardShown) {
+                hiddenSince = -1;
+                // One back per second at most: a second one while it closes would leave the screen.
+                if (now - backAt >= 1000) {
+                    key("back");
+                    backAt = now;
+                    pressed = true;
+                }
+            } else if (hiddenSince < 0) {
+                hiddenSince = now;
+            } else if (now - hiddenSince >= KEYBOARD_QUIET_MS) {
+                return pressed ? "hidden" : "keyboard already hidden";
+            }
+            SystemClock.sleep(POLL_MS);
+            now = SystemClock.uptimeMillis();
         }
         throw new IllegalStateException("keyboard still shown after back");
     }
@@ -1094,7 +1153,8 @@ final class Device {
         }
         if (field == null || !field.isEditable()) throw new IllegalStateException("no focused text field");
         String value = s.optString("value");
-        if (s.optBoolean("append", false) && field.getText() != null) value = field.getText() + value;
+        // An empty field reports its hint as its text; appending to that would type the hint too.
+        if (s.optBoolean("append", false) && field.getText() != null && !field.isShowingHintText()) value = field.getText() + value;
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
         if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) throw new IllegalStateException("set text failed");

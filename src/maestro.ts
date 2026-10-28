@@ -235,6 +235,9 @@ export function toMaestro(flow: FlowFile, appId?: string): Converted<string> {
   if (flow.dismiss?.length) skipped.push(`dismiss ${brief(flow.dismiss)} (Maestro has none; add optional taps where it shows up)`);
   const cmds: Cmd[] = [];
   steps.forEach((s, i) => {
+    // launchApp grants everything by default, so "grant all, then launch" is just launchApp.
+    const next = steps[i + 1];
+    if (s.op === "permissions" && s.grant === "all" && !s.revoke && next?.op === "launch" && next.package === s.package) return;
     const out = stepToMaestro(s, app);
     if (out) cmds.push(...out);
     else skipped.push(`step ${i + 1}: ${brief(toCompact(s))}`);
@@ -296,7 +299,9 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
       const extra = Object.keys(obj).filter((k) => !["appId", "clearState", "permissions", "arguments"].includes(k));
       if (extra.length) throw new Error(`launchApp ${extra.join(", ")}`);
       const pkg = app(arg);
-      const perms = fromMaestroPermissions(pkg, obj.permissions);
+      // Maestro grants every permission on launchApp unless told otherwise (Orchestra.kt:
+      // "For testing convenience, default to allow all on app launch"); a prompt would block replay.
+      const perms = fromMaestroPermissions(pkg, obj.permissions ?? { all: "allow" });
       const launch: Step = { op: "launch", package: pkg, ...(obj.arguments && typeof obj.arguments === "object" ? { args: obj.arguments } : {}) };
       return [...(obj.clearState === true ? [{ op: "clear_app", package: pkg }] : []), ...(perms ? [perms] : []), launch];
     }

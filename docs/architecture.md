@@ -69,7 +69,7 @@ Each step is `{"op": "...", ...}`. Targets for tap/long_press/type/wait_*:
 `ref` (from the latest observe) | `x`,`y` | `text` (text or content-desc, exact first, then
 contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. When the matched node
 is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
-text/id/desc target until it appears; replays set it on every targeted step.
+text/id/desc target until it appears, is not covered (a splash screen or a sheet still on top) and is enabled (a submit button the app enables once it has handled the input; one still disabled at the timeout is tapped anyway, as in Maestro, and an explicit `enabled` selector is not waited on); replays set it on every targeted step. When the cover is another app's window, the error names it (`is behind a dialog from <package> ("...")`).
 
 Text (and desc) written `"/like this/"` is a regex, case-insensitive, compiled once per
 pattern: the whole text matching counts as exact, a match inside it as contains. Plain text is
@@ -99,16 +99,16 @@ measured as the union of every window the system lists.
 |---|---|---|
 | observe | | agent |
 | tap / long_press | target, `ms` for long_press | agent |
-| type | `value`, optional target or `field` (label text), `submit`, `append` | agent (ACTION_SET_TEXT) |
+| type | `value`, optional target or `field` (label text), `submit`, `append` (ignored while the field shows its hint) | agent (ACTION_SET_TEXT) |
 | scroll | `dir`, optional `until` {target}, `max` | agent (scroll action, swipe fallback) |
 | swipe | `x1,y1,x2,y2,ms` | agent |
 | key | back, home, enter, recents, delete, tab, or a keycode | agent |
 | wait_for / wait_gone | target, `timeout` | agent (polls every 40 ms) |
 | wait_idle | `quietMs`, `timeout` | agent (tree unchanged for quietMs) |
 | sleep | `ms` | agent |
-| hide_keyboard | | agent (back while the input-method window is listed, then waits up to 1.5 s for it to go; a no-op when none is shown) |
+| hide_keyboard | | agent (back while the input-method window is listed, until it has stayed hidden for 400 ms, so a keyboard still sliding in after a tap on a field is caught too; at most one back per second, fails after 3 s) |
 | windows | | agent (debug: every window the system reports, with type/layer/title) |
-| launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`) |
+| launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`, then waits 1.5 s and up to 3 s more for Android's asynchronous runtime-permission reset, which otherwise revokes a grant made right after) |
 | apps | `filter` | server (`pm list packages -3`) |
 | launch `args` | `{name: value}` intent extras: booleans `--ez`, integers `--ei`, other numbers `--ef`, the rest `--es` (single-quoted; names `[\w.-]+`) | server |
 | install_app / uninstall_app | `path` (relative to the working directory), `grant` (`-g`, every runtime permission) / `package` | server (`adb install -r`, 5 min limit; `pm uninstall`); both fail unless the answer is `Success` |
@@ -288,7 +288,7 @@ ways (Maestro reads it from `-e var=...`).
 | wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
 | repeat, hide_keyboard, `index` | `repeat: {times, while: {visible / notVisible}, commands}`, `hideKeyboard`, selector `index` (0-based on both sides) |
-| launch args, open_link, permissions | `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
+| launch args, open_link, permissions | `launchApp` without `permissions` imports as `permissions {grant: all}` + launch, because Maestro grants everything on launchApp by default (`Orchestra.kt`: "default to allow all on app launch"); export folds that pair back into a plain `launchApp`. `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
 | run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: "${...}"}` keeps its expression, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative

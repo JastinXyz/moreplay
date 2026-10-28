@@ -139,7 +139,7 @@ test("recording gets the steps as given, without the implicit wait", async () =>
 test("clear_app wipes the app with pm clear and fails loudly when it cannot", async () => {
   const ok = fakeDevice({ shell: { "pm clear": "Success\n" } });
   assert.match(await runAct(ok, [{ op: "clear_app", package: "com.app" }], opts), /✓ clear_app \d+ms cleared com\.app/);
-  assert.deepEqual(ok.calls, [{ shell: "pm clear com.app" }]);
+  assert.deepEqual(ok.calls, [{ shell: "pm clear com.app" }, { shell: "dumpsys package com.app" }]);
 
   const denied = fakeDevice({ shell: { "pm clear": "Failed\n" } });
   assert.match(await runAct(denied, [{ op: "clear_app", package: "com.app" }, { op: "tap", text: "A" }], opts), /✗ clear_app \d+ms pm clear com\.app: Failed$/);
@@ -263,4 +263,18 @@ test("the tools that hold UiAutomation are named from a ps listing", async () =>
   ].join("\n");
   assert.deepEqual(uiautomationHolders(ps), ["mobilecli's device server (mobile-mcp starts it again while a session runs)", "uiautomator command"]);
   assert.deepEqual(uiautomationHolders("app_process / com.genymobile.scrcpy.Server"), []); // scrcpy does not use UiAutomation
+});
+
+test("clear_app waits until Android has revoked the runtime permissions it resets", async () => {
+  const { runtimeGranted } = await import("../dist/act.js");
+  const dump = (g) => `Packages:\n    User 0:\n      runtime permissions:\n        android.permission.CAMERA: granted=${g}, flags=[ ]\n        android.permission.POST_NOTIFICATIONS: granted=false\n    install permissions:\n      android.permission.INTERNET: granted=true\n`;
+  assert.equal(runtimeGranted(dump(true)), 1);
+  assert.equal(runtimeGranted(dump(false)), 0); // install permissions do not count
+
+  let reads = 0;
+  const d = fakeDevice({ shell: { "pm clear": "Success\n" } });
+  const shell = d.shell;
+  d.shell = async (cmd) => (cmd.startsWith("dumpsys") ? dump(++reads < 3) : shell(cmd));
+  assert.match(await runAct(d, [{ op: "clear_app", package: "com.app" }], opts), /cleared com\.app/);
+  assert.equal(reads, 3); // granted, granted, then revoked
 });
