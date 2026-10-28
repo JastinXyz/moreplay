@@ -86,7 +86,8 @@ installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`
   "Generated with" footer). Git identity is the repo's configured `JastinXyz`.
 - CI (`.github/workflows/ci.yml`) runs `npm run build` and `npm test` on every PR; keep it green.
 - New server logic gets a unit test with the fake device. Keep the tool-definition budget.
-- The repo is private until launch (see `docs/roadmap.md`), then it goes public under MIT.
+- The repo is public (MIT) and published to npm as `moreplay` since 0.1.0 (2026-10-28). Releases:
+  bump `version` in `package.json` in a PR, merge, then the owner runs `npm publish` (2FA).
 - **The test device is the owner's personal phone.** Ask before every device session, even if
   you used it earlier in the same conversation. Never tap near
   the status bar or quick settings, never type into apps that hold user data, and undo any

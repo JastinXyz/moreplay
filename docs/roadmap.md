@@ -85,4 +85,5 @@ devices, a screenshot-only (vision) mode for apps with no accessibility tree.
 
 - [x] README benchmark table (from `spike/RESULTS.md`)
 - [x] README demo GIFs (Claude Code driving the phone, and a no-AI replay)
-- [ ] Make the GitHub repo public, publish to npm, post to communities
+- [x] Make the GitHub repo public, publish to npm (0.1.0 on 2026-10-28)
+- [ ] Post to communities
