@@ -23,6 +23,11 @@ steps:
 Every `act` step that succeeds is kept. Refs (`@12`) are saved as the element's id or text, so
 the file works in later sessions. `flow {action: discard}` drops the recording.
 
+Start recording before doing the task, not after exploring it: wrong turns can be removed
+afterwards with `flow {action: patch, name, index, steps: []}`, which is cheaper than doing the
+task twice (and creating its data twice). `observe`, `apps` and `wait_idle` are not saved,
+because replays wait for each element on their own.
+
 To keep a password or PIN out of the file, give it as a var when recording:
 `flow {action: record, name: login, vars: {pin: "482913"}}`. Write `${pin}` in `act`, and the
 saved flow says `${pin}` too, even where the value itself was typed.

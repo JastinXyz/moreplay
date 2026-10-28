@@ -31,6 +31,10 @@ Text written between slashes is a regular expression, case-insensitive:
 A whole-text match counts as exact, a match inside the text as contains. Text without slashes is
 never a regex, so `Search...` means those characters.
 
+Watch out with short or numeric text. When no element has exactly that text yet (the calendar
+has not opened), the contains rule picks any label that includes it: `tap: "1"` can hit
+`Order 1000`. Anchor it (`"/^1$/"`), or `wait_for` something on the screen first.
+
 ## Position: below, above, leftOf, rightOf
 
 Pick an element by where it is relative to another one (the anchor). The anchor is a target

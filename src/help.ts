@@ -23,9 +23,11 @@ export async function help(topic?: string): Promise<string> {
 /** Sent once when a client connects (MCP `instructions`): how to work with the tools. */
 export const INSTRUCTIONS = `moreplay drives an Android phone over adb.
 
-Work loop: observe once, then act with every step you can batch in ONE call; act returns the new screen, so no extra observe is needed. Prefer text or id selectors; refs (@12) and coordinates are a last resort, and refs only last until the next observe.
+Work loop: observe once, then act with every step you can batch in ONE call. act waits for the screen to settle and returns it, so add no wait_idle or observe after it. Steps after the first wait for their element, so a tap into a screen that is still opening needs no wait either.
 
-To make a task repeatable: flow record {name, vars} before acting, flow save after. Give passwords and PINs as vars and write \${name} in act, so the saved file never holds them. Replay with flow run (no model needed), or \`npx moreplay run <name>\` in a terminal. When a replay fails, flow patch the reported step and run again.
+Selectors: prefer text or id; refs (@12) and coordinates are a last resort, and refs only last until the next observe. Text matches exactly first, then any label that contains it, so short or numeric text can hit the wrong element when the one you mean is not on screen yet ("1" hits "Order 1000"): use "/^1$/", or wait_for the screen it lives on first. type replaces the field's text (append: true keeps it); no need to delete characters first.
+
+To make a task repeatable: start flow record {name, vars} BEFORE doing the task, not after exploring it, then flow save. Every successful act step is kept; remove detours afterwards with flow patch {index, steps: []} rather than doing the task twice, especially when it creates real data. Give passwords and PINs as vars and write \${name} in act, so the saved file never holds them. Replay with flow run (no model needed), or \`npx moreplay run <name>\` in a terminal. When a replay fails, flow patch the reported step and run again.
 
 Screenshots are saved as files; use show:true only when you need the pixels, and screenshot {refs} to see unlabeled icons.
 

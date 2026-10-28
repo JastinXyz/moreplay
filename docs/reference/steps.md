@@ -10,7 +10,7 @@ explained in the selectors topic.
 |---|---|---|
 | `tap` | target | `tap: Sign in` |
 | `long_press` | target, `ms` (default 700) | `long_press: Photo` |
-| `type` | `value`; where: a target, or `field` (the field's label), or nothing for the focused field; `submit: true` presses enter after; `append: true` keeps the current text | `type: hello` |
+| `type` | `value`; where: a target, or `field` (the field's label), or nothing for the focused field; `submit: true` presses enter after. Replaces the field's text; `append: true` keeps it | `type: hello` |
 | `swipe` | `x1`, `y1`, `x2`, `y2` (pixels or `"50%"`), `ms` (default 250) | |
 | `scroll` | `dir`: down, up, left, right; `until`: a target to scroll to (fails if the end comes first); `max` swipes (default 10) | `scroll: down` |
 | `key` | back, home, enter, recents, delete, tab, or an Android keycode | `key: back` |
@@ -22,7 +22,7 @@ explained in the selectors topic.
 |---|---|---|
 | `wait_for` | target, `timeout` ms (default 5000) | `wait_for: Home` |
 | `wait_gone` | target, `timeout` | `wait_gone: Loading` |
-| `wait_idle` | `quietMs` (default 300), `timeout` | |
+| `wait_idle` | `quietMs` (default 300), `timeout`. Rarely needed: `act` already waits for the screen to settle before returning it, and replays wait for each element | |
 | `sleep` | `ms` | `sleep: 500` |
 | `observe` | | |
 | `screenshot` | `name`: a file name (saved under the evidence folder) or a path | `screenshot: home` |

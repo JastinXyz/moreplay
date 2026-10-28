@@ -57,6 +57,9 @@ claude mcp add moreplay -- npx -y moreplay
 codex mcp add moreplay -- npx -y moreplay
 ```
 
+`claude mcp add` only adds it for the folder you run it in. Run it in the folder you open Claude
+Code in, or add `--scope user` to have it everywhere.
+
 **Claude Desktop, Cursor, Windsurf, Gemini CLI, Cline and most other apps**: add this to the
 app's MCP config file.
 
