@@ -48,7 +48,7 @@ What users of those tools reach for or complain about. Before launch:
 - [x] Timeouts on every adb call and agent request (mobile-mcp hangs on a call with no timeout, #438)
 - [x] Re-measure the README benchmark against current mobilecli/mobile-mcp: mobilecli now also
       runs an app_process server with one UiAutomation, so the old 2.2-3.3 s figure may be stale
-- [ ] `install_app` / uninstall, `open_link` (deep links), runtime permissions, launch arguments
+- [x] `install_app` / uninstall, `open_link` (deep links), runtime permissions, launch arguments
 - [ ] Logcat filtered by package/level and capped for tokens; attach a crash when the app died mid-step
 - [ ] `run --junit report.xml`, and a screenshot + screen dump saved automatically for a failed step
 - [ ] Percent points (`x: "50%"`) and percent swipes, so flows survive other screen sizes

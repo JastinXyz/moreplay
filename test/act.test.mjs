@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAct, fmt, screenshotPath, withActWaits } from "../dist/act.js";
@@ -28,6 +28,10 @@ function fakeDevice({ fail = [], shell = {} } = {}) {
     async screenshot() {
       calls.push({ screenshot: true });
       return Buffer.from("jpeg");
+    },
+    async install(apk, grantAll) {
+      calls.push({ install: apk, grantAll });
+      return shell.install ?? "Performing Streamed Install\nSuccess\n";
     },
   };
 }
@@ -163,4 +167,56 @@ test("an agent batch gets time for the waits it asks for", async () => {
   assert.equal(stepBudget([{ op: "tap", text: "A" }]), 0);
   assert.equal(stepBudget([{ op: "tap", text: "A", wait: 3000 }, { op: "wait_for", text: "B" }, { op: "sleep", ms: 500 }]), 3000 + 5000 + 500);
   assert.equal(stepBudget([{ op: "wait_for", text: "B", timeout: 20000 }, { op: "scroll", dir: "down", max: 4 }, { op: "long_press", text: "C" }]), 20000 + 6000 + 700);
+});
+
+test("install_app installs with adb (-g on grant) and refuses a missing file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    const apk = join(dir, "app.apk");
+    await writeFile(apk, "apk");
+    const d = fakeDevice();
+    assert.match(await runAct(d, [{ op: "install_app", path: apk, grant: true }], opts), /✓ install_app \d+ms installed app\.apk/);
+    assert.deepEqual(d.calls, [{ install: apk, grantAll: true }]);
+
+    const bad = fakeDevice({ shell: { install: "Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]" } });
+    assert.match(await runAct(bad, [{ op: "install_app", path: apk }], opts), /install failed: Failure \[INSTALL_FAILED_USER_RESTRICTED/);
+
+    const none = fakeDevice();
+    assert.match(await runAct(none, [{ op: "install_app", path: join(dir, "nope.apk") }], opts), /install_app: no file at/);
+    assert.deepEqual(none.calls, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("uninstall_app, open_link and launch args build safe adb commands", async () => {
+  const d = fakeDevice({ shell: { "pm uninstall": "Success\n", "resolve-activity": "com.app/.Main\n", "am start -W": "Status: ok\n" } });
+  const out = await runAct(d, [
+    { op: "uninstall_app", package: "com.app" },
+    { op: "open_link", url: "myapp://item/1?name=it's", package: "com.app" },
+    { op: "launch", package: "com.app", args: { user: "a b", count: 3, ratio: 1.5, debug: true } },
+  ], opts);
+  assert.match(out, /uninstalled com\.app/);
+  assert.match(out, /opened myapp:\/\/item\/1\?name=it's/);
+  const shells = d.calls.map((c) => c.shell).filter(Boolean);
+  assert.ok(shells.includes("am start -W -a android.intent.action.VIEW -d 'myapp://item/1?name=it'\\''s' -p com.app"), shells.join("\n"));
+  assert.ok(shells.includes("am start -n 'com.app/.Main' --es user 'a b' --ei count 3 --ef ratio 1.5 --ez debug true"), shells.join("\n"));
+
+  const err = fakeDevice({ shell: { "am start -W": "Error: Activity not started, unable to resolve Intent\n" } });
+  assert.match(await runAct(err, [{ op: "open_link", url: "nope://x" }], opts), /✗ open_link \d+ms open_link nope:\/\/x: Error: Activity not started/);
+  assert.match(await runAct(fakeDevice({ shell: { "resolve-activity": "com.app/.Main\n" } }), [{ op: "launch", package: "com.app", args: { "a;b": 1 } }], opts), /launch arg name not allowed/);
+});
+
+test("permissions grants and revokes short names, and grant all takes what the app requests", async () => {
+  const d = fakeDevice();
+  assert.match(await runAct(d, [{ op: "permissions", package: "com.app", grant: ["CAMERA"], revoke: "android.permission.RECORD_AUDIO" }], opts), /com\.app \+CAMERA -RECORD_AUDIO/);
+  assert.deepEqual(d.calls.map((c) => c.shell), ["pm grant com.app android.permission.CAMERA 2>&1; true", "pm revoke com.app android.permission.RECORD_AUDIO 2>&1; true"]);
+
+  const dump = "Packages:\n  requested permissions:\n    android.permission.INTERNET\n    android.permission.CAMERA\n  install permissions:\n";
+  const all = fakeDevice({ shell: { "dumpsys package": dump, "INTERNET": "Exception: not a changeable permission type" } });
+  assert.match(await runAct(all, [{ op: "permissions", package: "com.app", grant: "all" }], opts), /com\.app \+CAMERA$/m);
+
+  const refused = fakeDevice({ shell: { "pm grant": "Exception occurred while executing 'grant': Unknown permission: X" } });
+  assert.match(await runAct(refused, [{ op: "permissions", package: "com.app", grant: ["X"] }], opts), /pm grant android\.permission\.X: Exception/);
+  assert.match(await runAct(fakeDevice(), [{ op: "permissions", package: "com.app", grant: ["CAMERA; reboot"] }], opts), /permission name not allowed/);
 });

@@ -16,6 +16,7 @@ const DEVICE_PORT = 9070;
 const ADB_TIMEOUT_MS = 30_000;
 const PUSH_TIMEOUT_MS = 120_000;
 const IMAGE_TIMEOUT_MS = 20_000;
+const INSTALL_TIMEOUT_MS = 300_000;
 const RUN_BASE_MS = 30_000;
 
 /**
@@ -97,6 +98,13 @@ export class Device {
   async shell(cmd: string, timeout = ADB_TIMEOUT_MS): Promise<string> {
     const serial = await this.getSerial();
     return this.adbRun(["-s", serial, "shell", cmd], timeout);
+  }
+
+  async install(apk: string, grantAll: boolean): Promise<string> {
+    const serial = await this.getSerial();
+    return this.adbRun(["-s", serial, "install", "-r", ...(grantAll ? ["-g"] : []), apk], INSTALL_TIMEOUT_MS).catch(
+      (e: Error) => e.message,
+    );
   }
 
   async getSerial(): Promise<string> {
