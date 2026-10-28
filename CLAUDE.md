@@ -43,7 +43,8 @@ digging through git history. If a doc says something the code no longer does, fi
     start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, clear_app, apps,
     screenshot), output formatting. Depends on the `ActDevice` interface so tests use a fake.
-- `test/`: `node:test` suites against `dist/` (no device needed). `act.test.mjs` uses a fake
+- `test/`: `node:test` suites against `dist/` (no device needed). `device.test.mjs` covers the
+  `moreplay run` device lock. `act.test.mjs` uses a fake
   device; `tools.test.mjs` checks the tool list, a 3700-char budget for tool definitions (JSON), and
   `flow show`/`patch` on a path;
   `cli.test.mjs` covers `--version`, `--help`, unknown commands; `flow.test.mjs` covers the

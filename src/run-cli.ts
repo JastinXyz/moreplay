@@ -8,6 +8,9 @@ const USAGE =
   "usage: moreplay run <flow name, .yaml path or folder>... [--var key=value]... [--evidence dir]\n" +
   "                       [--include-tags a,b] [--exclude-tags c] [--junit report.xml]";
 
+// Seconds without a new line before `run` says it is still going.
+const HEARTBEAT_S = 15;
+
 const tagList = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
 
 /**
@@ -70,7 +73,7 @@ export async function runCli(args: string[]): Promise<number> {
     return 1;
   }
 
-  const device = new Device();
+  const device = new Device("run");
   // Ctrl+C or a kill still removes the adb forward and stops the agent (finally does not run then).
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.on(sig, () => {
@@ -80,13 +83,31 @@ export async function runCli(args: string[]): Promise<number> {
   }
   const t0 = Date.now();
   const results: FlowReport[] = [];
+  // A step can wait for minutes (a slow screen, a long timeout) with nothing to print; say so
+  // instead of looking stuck.
+  let lastLine = Date.now();
+  const print = (line: string) => {
+    lastLine = Date.now();
+    console.log(line);
+  };
+  const heartbeat = setInterval(() => {
+    const quiet = Math.round((Date.now() - lastLine) / 1000);
+    if (quiet >= HEARTBEAT_S) print(`      ${color ? "\x1b[2m" : ""}… still running (${quiet} s since the last step)${color ? "\x1b[0m" : ""}`);
+  }, 1000);
+  heartbeat.unref();
   try {
     for (const { path, flow } of run) {
       // Labels come from the flow as written, so ${secrets} are not printed.
       const rep = new Reporter(flow.steps.map(fromCompact), color);
-      console.log(rep.header(near(path)));
+      print(rep.header(near(path)));
       try {
-        const result = await runFlow(device, flow, { vars, evidenceDir, dir: dirname(path), onStep: (i, r) => console.log(rep.step(i, r)) });
+        const result = await runFlow(device, flow, {
+          vars,
+          evidenceDir,
+          dir: dirname(path),
+          onStep: (i, r) => print(rep.step(i, r)),
+          onInner: (raw, r, depth) => print(rep.inner(raw, r, depth)),
+        });
         // Step lines print as they arrive, before a crash is known; show it once the flow stops.
         if (result.crash) console.log(result.crash.split("\n").map((l) => `      ${l}`).join("\n"));
         if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
@@ -109,6 +130,7 @@ export async function runCli(args: string[]): Promise<number> {
       }
     }
   } finally {
+    clearInterval(heartbeat);
     device.stop();
   }
   const secs = (Date.now() - t0) / 1000;

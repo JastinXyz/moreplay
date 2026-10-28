@@ -109,3 +109,9 @@ test("JUnit XML: a testcase per flow, failures with step, crash and artifacts, s
   assert.match(out, /<testcase classname="flows\/b.yaml" name="login &lt;ok&gt;" time="5.500">\n    <failure message="step 3: not found: text=&quot;Home&quot;">not found: text=&quot;Home&quot;\napp crashed: FATAL EXCEPTION: main\nartifacts: ev\/failed-step-3.jpg, ev\/failed-step-3.txt<\/failure>/);
   assert.match(out, /<testcase classname="flows\/c.yaml" name="slow" time="0"><skipped message="excluded by tags"\/><\/testcase>/);
 });
+
+test("inner steps print indented by depth, from the step as written", () => {
+  const rep = new Reporter([{ op: "run_flow", file: "login.yaml" }], false);
+  assert.equal(rep.inner({ type: { field: "PIN", value: "${PIN}" } }, { op: "type", ok: true, ms: 12 }, 1), '    · type "${PIN}" into "PIN"  12 ms');
+  assert.equal(rep.inner({ tap: "Next" }, { op: "tap", ok: false, ms: 5000, error: "x" }, 2), '      ✗ tap "Next"  5000 ms');
+});

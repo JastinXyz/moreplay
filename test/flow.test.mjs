@@ -358,3 +358,22 @@ test("run_flow when: true is decided by the vars", async () => {
   const withCard = await runFlow(fakeDevice(), flow, { evidenceDir: tmpdir(), vars: { CARD: "1234" } });
   assert.match(withCard.text, /ran 1 steps/);
 });
+
+test("runFlow reports steps inside run_flow and repeat as written, with their depth", async () => {
+  const seen = [];
+  const flow = {
+    name: "nested",
+    steps: [
+      { run_flow: { steps: [{ type: { field: "PIN", value: "${PIN}" } }, { repeat: { times: 2, steps: [{ tap: "Next" }] } }] } },
+    ],
+  };
+  const run = await runFlow(fakeDevice(), flow, { evidenceDir: tmpdir(), vars: { PIN: "482913" }, onInner: (raw, r, depth) => seen.push([JSON.stringify(raw), r.ok, depth]) });
+  assert.ok(run.ok, run.text);
+  // The secret stays a ${var}; the repeat's rounds come before the repeat itself finishes.
+  assert.deepEqual(seen, [
+    ['{"type":{"field":"PIN","value":"${PIN}"}}', true, 1],
+    ['{"tap":"Next"}', true, 2],
+    ['{"tap":"Next"}', true, 2],
+    ['{"repeat":{"times":2,"steps":[{"tap":"Next"}]}}', true, 1],
+  ]);
+});

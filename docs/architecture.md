@@ -37,6 +37,18 @@ request. Longer guidance goes elsewhere:
 3. On server exit (stdin closed, SIGINT/SIGTERM): kill the adb shell child (the device process
    dies with it) and remove the forward.
 
+Two moreplay processes on one device (an MCP server and a `moreplay run` the model started from
+a shell) stop each other's agent, since starting one kills any other. So:
+
+- `moreplay run` (`new Device("run")`) writes `$TMPDIR/moreplay-run-<serial>.lock` with its pid
+  when it starts its agent and removes it on stop. The MCP server and `doctor` (role `server`)
+  refuse to start an agent while a live process holds that lock: `device busy: \`moreplay run\`
+  (pid N) is replaying flows on it`. A lock whose pid is gone is ignored. A run still takes the
+  device from an idle server, which restarts its agent on its next call.
+- A request whose agent dies midway (its adb shell exits) fails at once with "the agent stopped
+  in the middle of this request ..." instead of waiting out the request budget, which for a
+  flow with a 5-minute `wait_for` looked like a hang.
+
 ## UiAutomation bootstrap (agent/Main.java)
 
 `new UiAutomationConnection()` and `new UiAutomation(Looper, connection)` by reflection, then
@@ -301,6 +313,11 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   100 rounds with an error rather than looping forever. A failure names the round and step.
   The step's output is `ran N times`, and `moreplay run` prints `ran Nx` on its line (yellow for
   0): a `while` checked before a debounced search result appeared ran 0 rounds unnoticed.
+- **Live output of nested steps**: `Subflows.onInner` gets every step inside a run_flow / repeat
+  as it finishes, as written (before vars are filled, so secrets stay `${var}`), with its depth.
+  `moreplay run` prints them indented under the flow (`    · tap "Next"  120 ms`), before the
+  parent's own line. With nothing printed for 15 s it adds `… still running (N s since the last
+  step)`. A whole login used to be one silent line until it finished.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).
 

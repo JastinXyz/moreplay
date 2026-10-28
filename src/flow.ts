@@ -270,6 +270,8 @@ export interface RunFlowOptions {
   dir?: string;
   /** Gets each step's result (0-based index) as soon as it finishes; the CLI prints them live. */
   onStep?: (index: number, result: StepResult) => void;
+  /** Gets each step inside a run_flow / repeat as it finishes (as written, with its depth). */
+  onInner?: Subflows["onInner"];
 }
 
 export interface FlowRun {
@@ -296,7 +298,7 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
   const t0 = Date.now();
   const prepare = (raw: Record<string, unknown>[], vars: Record<string, string>) =>
     withDismiss(withWaits(substitute(raw.map(fromCompact), vars), opts.waitMs), flow.dismiss);
-  const subflows: Subflows = { load: loadSubflow, prepare, vars: opts.vars ?? {}, dir: opts.dir ?? process.cwd() };
+  const subflows: Subflows = { load: loadSubflow, prepare, vars: opts.vars ?? {}, dir: opts.dir ?? process.cwd(), onInner: opts.onInner };
   const exec = await executeSteps(device, steps, evidenceDir, opts.onStep && ((r, i) => opts.onStep!(i, r)), subflows);
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
   let shots = exec.outcomes.some((o) => o.step.op === "screenshot" && o.result.ok);
