@@ -247,11 +247,17 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   taps the first dismiss selector on screen, resets the step's wait, and notes
   `(dismissed text="...")` in its output. Found on a WebView app whose ad appears seconds after
   launch and shows "Lanjut ke aplikasi" only after a countdown.
+- **Expressions**: `${...}` takes `NAME`, `NAME[n]` (one character, e.g. a PIN digit), `!!NAME`
+  (set and not empty) and `NAME == 'x'` / `NAME != 'x'`. Anything else fails before the flow
+  runs rather than being half-understood. A plain `NAME` must be set; in the other forms a
+  missing var counts as empty. Maestro's `${...}` is JavaScript, so import keeps these forms and
+  anything richer fails at replay with a clear message.
 - **Subflows and conditions** (`run_flow`, a host op, so it splits the batch): `{file}` loads
   another flow file relative to the calling flow's folder (`.yaml` optional), `{steps}` runs an
   inline list; `vars` are layered on the caller's (a subflow's own `${var}`s are filled when it
   runs, not up front). `when: {visible | notVisible: target}` is checked once on the current
-  screen (a `wait_for` / `wait_gone` with `timeout: 0`); not met reports `skipped (when not
+  screen (a `wait_for` / `wait_gone` with `timeout: 0`), or `when: {true: "${!!CARD}"}` decided by the
+  vars alone; not met reports `skipped (when not
   met)` and passes. Inner steps get the same waits and `dismiss` list as the flow. A failure
   names the inner step (`step 2 (tap) failed: ...`); nesting stops at 8 levels so a flow that
   runs itself fails instead of looping. `act` takes run_flow too, with files relative to the
@@ -283,10 +289,10 @@ ways (Maestro reads it from `-e var=...`).
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
 | repeat, hide_keyboard, `index` | `repeat: {times, while: {visible / notVisible}, commands}`, `hideKeyboard`, selector `index` (0-based on both sides) |
 | launch args, open_link, permissions | `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
-| run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: ...}` expressions are skipped, and a `commands` block converts whole or not at all |
+| run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: "${...}"}` keeps its expression, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
 selector keys `width` / `height` / `tolerance`, `traits`, `containsDescendants`, other `launchApp` options (`stopApp: false`, ...),
-scripts, `when: {true / platform}` (import). observe/apps/windows export to nothing.
+scripts, `when: {platform}` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

@@ -54,7 +54,7 @@ function fromMaestroPermissions(pkg: string, perms: unknown): Step | null {
 
 // Maestro reads every text as a regex; droidreplay only when written "/like this/".
 // ${var} placeholders are neither escaped nor counted as regex.
-const PLACEHOLDER = /(\$\{\w+\})/;
+const PLACEHOLDER = /(\$\{[^}]+\})/;
 const REGEX_CHARS = /[|*+?()[\]{}^$\\]/;
 
 /** droidreplay text -> Maestro text: "/re/" as is, plain text escaped so Maestro matches it literally. */
@@ -195,7 +195,9 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
     }
     case "run_flow": {
       const out: Record<string, unknown> = {};
-      if (s.when && typeof s.when === "object") {
+      if (s.when && typeof s.when === "object" && "true" in (s.when as object)) {
+        out.when = { true: (s.when as Record<string, unknown>).true };
+      } else if (s.when && typeof s.when === "object") {
         const w = s.when as Record<string, unknown>;
         const k = "notVisible" in w ? "notVisible" : "visible";
         const t = w[k];
@@ -387,11 +389,16 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
       if (obj.when !== undefined) {
         const w = (obj.when ?? {}) as Record<string, unknown>;
         const keys = Object.keys(w);
-        if (keys.length !== 1 || (keys[0] !== "visible" && keys[0] !== "notVisible")) throw new Error(`runFlow when ${keys.join(", ")}`);
-        const t = fromSelector(w[keys[0]]);
-        if (typeof t === "string") throw new Error(t);
-        const tk = Object.keys(t);
-        step.when = { [keys[0]]: tk.length === 1 && tk[0] === "text" ? t.text : t };
+        if (keys.length === 1 && keys[0] === "true") {
+          // A ${...} condition; droidreplay evaluates the simple ones (see flow.ts evaluate).
+          step.when = { true: String(w.true) };
+        } else {
+          if (keys.length !== 1 || (keys[0] !== "visible" && keys[0] !== "notVisible")) throw new Error(`runFlow when ${keys.join(", ")}`);
+          const t = fromSelector(w[keys[0]]);
+          if (typeof t === "string") throw new Error(t);
+          const tk = Object.keys(t);
+          step.when = { [keys[0]]: tk.length === 1 && tk[0] === "text" ? t.text : t };
+        }
       }
       if (obj.file !== undefined) step.file = String(obj.file);
       if (obj.env && typeof obj.env === "object") {

@@ -182,16 +182,35 @@ export async function listFlows(dir: string): Promise<string[]> {
 }
 
 /** Replaces ${name} in every string value. Throws listing every variable that has no value. */
+/**
+ * The value of one `${...}`: `NAME`, `NAME[2]` (one character), `!!NAME` (set and not empty),
+ * `NAME == 'x'` / `NAME != 'x'`. Enough for what Maestro suites write; anything else is an
+ * error, not silently wrong. A plain `NAME` must be set; the tests treat a missing one as "".
+ */
+function evaluate(expr: string, vars: Record<string, string>, missing: Set<string>): string {
+  const e = expr.trim();
+  let m = /^(\w+)$/.exec(e);
+  if (m) {
+    if (m[1] in vars) return vars[m[1]];
+    missing.add(m[1]);
+    return "";
+  }
+  if ((m = /^(\w+)\[(\d+)\]$/.exec(e))) {
+    if (!(m[1] in vars)) missing.add(m[1]);
+    return (vars[m[1]] ?? "").charAt(Number(m[2]));
+  }
+  if ((m = /^!!\s*(\w+)$/.exec(e))) return String(Boolean(vars[m[1]]));
+  if ((m = /^(\w+)\s*(==|!=|===|!==)\s*(?:'([^']*)'|"([^"]*)")$/.exec(e))) {
+    const equal = (vars[m[1]] ?? "") === (m[3] ?? m[4]);
+    return String(m[2].startsWith("=") ? equal : !equal);
+  }
+  throw new Error(`unsupported expression \${${expr}} (use NAME, NAME[n], !!NAME, NAME == 'x' or NAME != 'x')`);
+}
+
 export function substitute(steps: Step[], vars: Record<string, string>): Step[] {
   const missing = new Set<string>();
   const fill = (v: unknown): unknown => {
-    if (typeof v === "string") {
-      return v.replace(/\$\{(\w+)\}/g, (_, k: string) => {
-        if (k in vars) return vars[k];
-        missing.add(k);
-        return "";
-      });
-    }
+    if (typeof v === "string") return v.replace(/\$\{([^}]+)\}/g, (_, expr: string) => evaluate(expr, vars, missing));
     if (Array.isArray(v)) return v.map(fill);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]));
     return v;

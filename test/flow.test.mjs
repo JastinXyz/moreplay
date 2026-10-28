@@ -320,3 +320,22 @@ test("a failed flow saves a screenshot and the screen as text next to its eviden
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("${...} takes NAME, NAME[n], !!NAME and == / != comparisons, and refuses anything else", () => {
+  const vars = { PIN: "482913", CLEAR: "true", EMPTY: "" };
+  const one = (t) => substitute([{ op: "tap", text: t }], vars)[0].text;
+  assert.equal(one("${PIN[0]}${PIN[5]}"), "43");
+  assert.equal(one("${!!PIN} ${!!EMPTY} ${!!NOPE}"), "true false false");
+  assert.equal(one("${CLEAR == 'true'} ${CLEAR != 'true'} ${NOPE == ''}"), "true false true");
+  assert.throws(() => one("${PIN.length > 3}"), /unsupported expression \$\{PIN\.length > 3\}/);
+  assert.throws(() => one("${NOPE[0]}"), /missing variable\(s\): NOPE/);
+});
+
+test("run_flow when: true is decided by the vars", async () => {
+  const d = fakeDevice();
+  const flow = { name: "w", steps: [{ run_flow: { when: { true: "${!!CARD}" }, steps: [{ tap: "${CARD}" }] } }, { tap: "Home" }] };
+  const without = await runFlow(d, flow, { evidenceDir: tmpdir(), vars: { CARD: "" } });
+  assert.match(without.text, /skipped \(when not met\)/);
+  const withCard = await runFlow(fakeDevice(), flow, { evidenceDir: tmpdir(), vars: { CARD: "1234" } });
+  assert.match(withCard.text, /ran 1 steps/);
+});
