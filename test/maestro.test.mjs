@@ -177,3 +177,30 @@ test("relative selectors keep Maestro's names both ways; index is still skipped"
   const [, cmds] = commands(toMaestro(out, "com.app").out);
   assert.deepEqual(cmds, [{ tapOn: { text: "1", below: "Enter your PIN" } }, { tapOn: { above: "Finance", leftOf: { id: "menu_more" } } }]);
 });
+
+test("Maestro regex text becomes /re/ and back; plain text and ${vars} stay literal", () => {
+  const { out } = fromMaestro(`appId: com.app
+---
+- extendedWaitUntil:
+    visible: "Home|Bills|Enter PIN"
+- assertVisible: "order .* cancelled"
+- tapOn: "Search..."
+- tapOn: "\${LABEL}"
+- tapOn: "Rp \${AMOUNT} (paid)"
+`);
+  assert.deepEqual(out.steps, [
+    { wait_for: "/Home|Bills|Enter PIN/" },
+    { wait_for: "/order .* cancelled/" },
+    { tap: "Search..." }, // a lone "." is usually just a dot
+    { tap: "${LABEL}" },
+    { tap: "/Rp ${AMOUNT} (paid)/" },
+  ]);
+  const [, cmds] = commands(toMaestro(out, "com.app").out);
+  assert.deepEqual(cmds, [
+    { extendedWaitUntil: { visible: { text: "Home|Bills|Enter PIN" } } },
+    { extendedWaitUntil: { visible: { text: "order .* cancelled" } } },
+    { tapOn: "Search\\.\\.\\." }, // escaped, so Maestro matches the dots literally
+    { tapOn: "${LABEL}" },
+    { tapOn: "Rp ${AMOUNT} (paid)" },
+  ]);
+});

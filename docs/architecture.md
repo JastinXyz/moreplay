@@ -55,6 +55,10 @@ contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. Whe
 is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
 text/id/desc target until it appears; replays set it on every targeted step.
 
+Text (and desc) written `"/like this/"` is a regex, case-insensitive, compiled once per
+pattern: the whole text matching counts as exact, a match inside it as contains. Plain text is
+never a regex, so labels such as `Search...` mean what they say.
+
 Position keys `below` / `above` / `leftOf` / `rightOf` (Maestro's names) take another target
 (`"text"` or `{text|id|desc}`, which may nest its own position keys). Among the matches, or the
 tappable elements when the step has no text/id/desc (icons without a label), the agent keeps
@@ -210,6 +214,7 @@ ways (Maestro reads it from `-e var=...`).
 | droidreplay | Maestro |
 |---|---|
 | launch / stop_app / clear_app | `launchApp` / `stopApp` / `clearState` (bare when the package is the header's `appId`, which defaults to the first launched package). Import turns `launchApp: {clearState: true}` into clear_app + launch |
+| text everywhere | Maestro reads text as a regex: import wraps text using regex characters other than `.` in `/.../`; export writes `/re/` as `re` and escapes plain text. `${var}` is left alone both ways |
 | tap / long_press `text`, `desc`, `id`, `x,y`, position keys | `tapOn` / `longPressOn` with `text` (Maestro's text also matches content-desc), `id`, `point: "x,y"`, `below`/`above`/`leftOf`/`rightOf` (same names, anchors converted the same way); `optional` kept |
 | type `{field, value}` | `tapOn: field`, `eraseText` (unless `append`), `inputText`, `pressKey: Enter` for `submit`. Import folds `eraseText` + `inputText` back into one replacing type |
 | key back / home / enter / delete / tab | `back`, `pressKey: Home/Enter/Backspace/Tab` |
