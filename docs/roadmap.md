@@ -87,3 +87,11 @@ devices, a screenshot-only (vision) mode for apps with no accessibility tree.
 - [x] README demo GIFs (Claude Code driving the phone, and a no-AI replay)
 - [x] Make the GitHub repo public, publish to npm (0.1.0 on 2026-10-28)
 - [ ] Post to communities
+
+## Docs (for people and for AI agents)
+
+- [x] MCP `instructions` on connect, and `flow {action: "help"}` serving `docs/reference/`
+  (steps, selectors, flows, cli); the reference ships in the npm package
+- [ ] Website on GitHub Pages (Starlight or VitePress) built from `docs/reference/`, plus guides
+  (record and replay, secrets, CI, Maestro, troubleshooting) and `llms.txt` / `llms-full.txt`
+- [ ] Slim the README down to the pitch and quick start, linking to the website

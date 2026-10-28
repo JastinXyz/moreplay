@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { runAct, saveScreenshot } from "./act.js";
 import { Device, VERSION } from "./device.js";
+import { help, INSTRUCTIONS } from "./help.js";
 import { EVIDENCE_DIR, flowName, FLOWS_DIR, fromCompact, listFlows, loadFlow, loadSubflow, patchSteps, Recorder, runFlow, saveFlow, substitute } from "./flow.js";
 
 /** Runs the MCP server on stdio until the client goes away. */
@@ -17,7 +18,7 @@ export async function startServer(): Promise<void> {
   // Where `flow save` writes: the name or path given to `flow record`.
   let recordTarget = "";
 
-  const server = new McpServer({ name: "moreplay", version: VERSION });
+  const server = new McpServer({ name: "moreplay", version: VERSION }, { instructions: INSTRUCTIONS });
 
   const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 
@@ -101,10 +102,10 @@ export async function startServer(): Promise<void> {
         "record{name, vars?}: keep every successful act step (refs become stable selectors); ${var} in act takes vars, saved unexpanded. save / discard: end it.",
         "run{name, vars?, evidence?=dir}: replay; steps wait for their element.",
         "On failure: step number + screen; fix with patch{name, index, steps} (steps:[] deletes), run again.",
-        "list, show{name}. Flow files may set dismiss:[text|{id}]: popups tapped away whenever they appear.",
+        "list, show{name}, help{name?:steps|selectors|flows|cli}: full reference.",
       ].join("\n"),
       inputSchema: {
-        action: z.enum(["record", "save", "discard", "run", "patch", "list", "show"]),
+        action: z.enum(["record", "save", "discard", "run", "patch", "list", "show", "help"]),
         name: z.string().optional(),
         vars: z.record(z.string(), z.string()).optional(),
         evidence: z.string().optional(),
@@ -148,6 +149,8 @@ export async function startServer(): Promise<void> {
           const names = await listFlows(flowsDir);
           return text(names.length ? names.join("\n") : `no flows in ${flowsDir}`);
         }
+        case "help":
+          return text(await help(name));
         case "show": {
           const { path } = await loadFlow(flowsDir, need(name));
           return text(`${path}\n${await readFile(path, "utf8")}`);

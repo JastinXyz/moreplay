@@ -13,6 +13,18 @@ agent (Java jar in /data/local/tmp)        device, runs as the shell user
 apps on screen
 ```
 
+## What the model is told
+
+The tool definitions stay under a 3700-char budget because they are re-sent with every
+request. Longer guidance goes elsewhere:
+
+- MCP `instructions` (`src/help.ts`), sent once when a client connects: the observe -> act loop,
+  batching, record/save/replay, secrets as vars, and where the full reference is.
+- `flow {action: "help", name: steps | selectors | flows | cli}` returns
+  `docs/reference/<topic>.md`, which ships in the npm package. With no name it lists the topics.
+  The model reads a topic when it needs it (for example before writing position selectors by
+  hand) instead of paying for it on every request.
+
 ## Agent lifecycle
 
 1. First tool call runs `Device.ensureAgent()`: pick the device (`ANDROID_SERIAL` or the only

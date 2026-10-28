@@ -5,6 +5,12 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- The MCP server sends `instructions` on connect (how to batch, record and replay), and
+  `flow {action: "help", name}` returns the full reference for steps, selectors, flows and the
+  CLI. The reference ships in the package as `docs/reference/`.
+- README: setup for Codex CLI, Cursor, Windsurf, Gemini CLI, Cline and VS Code, and the
+  npx / global / project install options.
+
 ## [0.1.0] - 2026-10-28
 
 First release.
