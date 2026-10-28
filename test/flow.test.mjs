@@ -73,6 +73,15 @@ test("substitute fills vars and names every missing one", () => {
   assert.throws(() => substitute([{ op: "type", value: "${a} ${b}" }], { a: "1" }), /missing variable\(s\): b/);
 });
 
+test("an empty var fails up front, except in expressions and not-yet-run subflow steps", () => {
+  assert.throws(() => substitute([{ op: "type", value: "${phone}" }], { phone: "" }), /empty variable\(s\): phone .*\$\{!!phone\}/);
+  // Tests and comparisons may see an empty value; inline run_flow steps are filled when they run.
+  assert.deepEqual(
+    substitute([{ op: "run_flow", when: { true: "${!!card}" }, steps: [{ tap: "${card}" }] }, { op: "wait_for", text: "x${mode == ''}" }], { card: "", mode: "" }),
+    [{ op: "run_flow", when: { true: "false" }, steps: [{ tap: "${card}" }] }, { op: "wait_for", text: "xtrue" }],
+  );
+});
+
 test("replays wait for elements, and coordinate taps for the screen to settle", () => {
   assert.deepEqual(withWaits([
     { op: "tap", text: "A" }, { op: "tap", x: 1, y: 2 }, { op: "type", value: "v" }, { op: "type", field: "F", value: "v" },

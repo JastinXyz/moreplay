@@ -189,10 +189,13 @@ export async function listFlows(dir: string): Promise<string[]> {
  * `NAME == 'x'` / `NAME != 'x'`. Enough for what Maestro suites write; anything else is an
  * error, not silently wrong. A plain `NAME` must be set; the tests treat a missing one as "".
  */
-function evaluate(expr: string, vars: Record<string, string>, missing: Set<string>): string {
+function evaluate(expr: string, vars: Record<string, string>, missing: Set<string>, empty: Set<string>): string {
   const e = expr.trim();
   let m = /^(\w+)$/.exec(e);
   if (m) {
+    // An empty value is almost always a var that was never filled in (an empty env var passed
+    // as --var X=): typing it would "pass" and fail much later somewhere unrelated.
+    if (vars[m[1]] === "") empty.add(m[1]);
     if (m[1] in vars) return vars[m[1]];
     missing.add(m[1]);
     return "";
@@ -211,8 +214,9 @@ function evaluate(expr: string, vars: Record<string, string>, missing: Set<strin
 
 export function substitute(steps: Step[], vars: Record<string, string>): Step[] {
   const missing = new Set<string>();
+  const empty = new Set<string>();
   const fill = (v: unknown): unknown => {
-    if (typeof v === "string") return v.replace(/\$\{([^}]+)\}/g, (_, expr: string) => evaluate(expr, vars, missing));
+    if (typeof v === "string") return v.replace(/\$\{([^}]+)\}/g, (_, expr: string) => evaluate(expr, vars, missing, empty));
     if (Array.isArray(v)) return v.map(fill);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]));
     return v;
@@ -224,6 +228,10 @@ export function substitute(steps: Step[], vars: Record<string, string>): Step[] 
     return { ...(fill(rest) as Step), steps: inner };
   });
   if (missing.size) throw new Error(`missing variable(s): ${[...missing].join(", ")} (pass them in vars / --var)`);
+  if (empty.size) {
+    const names = [...empty];
+    throw new Error(`empty variable(s): ${names.join(", ")} (\${${names[0]}} needs a value; \${!!${names[0]}} tests whether one is set)`);
+  }
   return out;
 }
 

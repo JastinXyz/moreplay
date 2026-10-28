@@ -5,6 +5,13 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- A `${NAME}` whose value is empty fails before the flow runs, naming the var. It used to type
+  nothing, pass, and fail much later with an unrelated timeout. `${!!NAME}` still accepts empty.
+- A selector tap reports the label it hit, and `(partial match for "x")` when the text only
+  matched inside a longer label.
+- `wait_gone` on something that was never on screen says `not on screen (nothing to wait for)`
+  instead of a normal "gone after".
+
 - The MCP server sends `instructions` on connect (how to batch, record and replay), and
   `flow {action: "help", name}` returns the full reference for steps, selectors, flows and the
   CLI. The reference ships in the package as `docs/reference/`.
