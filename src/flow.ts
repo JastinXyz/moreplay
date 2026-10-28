@@ -16,7 +16,7 @@ export interface FlowFile {
   name: string;
   /** Tapped whenever they show up while a step waits: interstitial closes, permission prompts. */
   dismiss?: (string | Record<string, unknown>)[];
-  /** For picking flows out of a folder: `droidreplay run dir --include-tags smoke`. */
+  /** For picking flows out of a folder: `moreplay run dir --include-tags smoke`. */
   tags?: string[];
   steps: Record<string, unknown>[];
 }
@@ -48,8 +48,8 @@ export const DEFAULT_WAIT_MS = 5000;
 export const SETTLE_MS = 3000;
 
 // Defaults, relative to where the server or CLI runs; callers can pass their own paths.
-export const FLOWS_DIR = ".droidreplay/flows";
-export const EVIDENCE_DIR = ".droidreplay/evidence";
+export const FLOWS_DIR = ".moreplay/flows";
+export const EVIDENCE_DIR = ".moreplay/evidence";
 
 export function toCompact(step: Step): Record<string, unknown> {
   const { op, ...params } = step;
@@ -332,7 +332,7 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
 }
 
 /**
- * Flow files for `droidreplay run`: a folder stands for the .yaml files directly in it, sorted
+ * Flow files for `moreplay run`: a folder stands for the .yaml files directly in it, sorted
  * by name (subfolders hold subflows, so they are not run on their own); anything else is a flow
  * name or path as usual.
  */

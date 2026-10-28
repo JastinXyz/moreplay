@@ -1,15 +1,15 @@
-# droidreplay
+# moreplay
 
-[![npm](https://img.shields.io/npm/v/droidreplay)](https://www.npmjs.com/package/droidreplay)
-[![CI](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml/badge.svg)](https://github.com/JastinXyz/droidreplay/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/moreplay)](https://www.npmjs.com/package/moreplay)
+[![CI](https://github.com/JastinXyz/moreplay/actions/workflows/ci.yml/badge.svg)](https://github.com/JastinXyz/moreplay/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Claude Code using droidreplay to work out 7 × 6 on a phone's calculator and save the steps as a flow](docs/demo.gif)
+![Claude Code using moreplay to work out 7 × 6 on a phone's calculator and save the steps as a flow](docs/demo.gif)
 
 Let an AI assistant use your Android phone. It can read the screen, tap, type and scroll, and
 once it has done a task, you can save the steps and replay them later without the AI.
 
-droidreplay is an [MCP](https://modelcontextprotocol.io) server: a plugin that gives AI apps
+moreplay is an [MCP](https://modelcontextprotocol.io) server: a plugin that gives AI apps
 such as Claude Code, Claude Desktop or Cursor new tools. This one gives them an Android phone.
 
 - **Fast.** Reading the screen takes about 50 ms, not the usual 3 seconds.
@@ -40,10 +40,10 @@ such as Claude Code, Claude Desktop or Cursor new tools. This one gives them an 
 ### 3. Check that it works
 
 ```bash
-npx -y droidreplay doctor
+npx -y moreplay doctor
 ```
 
-This checks adb, your phone, and the droidreplay agent. It taps nothing. Lines with ✓ are
+This checks adb, your phone, and the moreplay agent. It taps nothing. Lines with ✓ are
 fine; a ✗ comes with a hint on how to fix it.
 
 ### 4. Add it to your AI app
@@ -51,7 +51,7 @@ fine; a ✗ comes with a hint on how to fix it.
 **Claude Code**
 
 ```bash
-claude mcp add droidreplay -- npx -y droidreplay
+claude mcp add moreplay -- npx -y moreplay
 ```
 
 **Claude Desktop, Cursor and other MCP apps**: add this to the app's MCP config file
@@ -60,9 +60,9 @@ claude mcp add droidreplay -- npx -y droidreplay
 ```json
 {
   "mcpServers": {
-    "droidreplay": {
+    "moreplay": {
       "command": "npx",
-      "args": ["-y", "droidreplay"]
+      "args": ["-y", "moreplay"]
     }
   }
 }
@@ -82,20 +82,20 @@ Ask your assistant things like:
 **Already have another phone tool, like mobile-mcp?** Name the one you want, so the assistant
 does not pick the other:
 
-- "Use droidreplay to open Settings and turn on dark mode."
-- "With droidreplay, check what is on the screen and save a screenshot to ./shots/home.jpg."
+- "Use moreplay to open Settings and turn on dark mode."
+- "With moreplay, check what is on the screen and save a screenshot to ./shots/home.jpg."
 
-Only one of them can control the phone at a time. If droidreplay says another tool holds the
+Only one of them can control the phone at a time. If moreplay says another tool holds the
 connection, turn the other MCP server off in your AI app (in Claude Code: `/mcp`), or ask the
 assistant to stop using it.
 
 Nothing is installed on the phone. A small agent (17 KB) is copied to `/data/local/tmp` and
-runs only while your AI app is using droidreplay.
+runs only while your AI app is using moreplay.
 
 ## Replay without the AI
 
 Ask the assistant to record a task ("start recording a flow called login"), let it do the
-task, then ask it to save the flow. You get a file like `.droidreplay/flows/login.yaml` (or wherever you ask it to save).
+task, then ask it to save the flow. You get a file like `.moreplay/flows/login.yaml` (or wherever you ask it to save).
 
 Passwords and PINs stay out of the file: give them as variables when recording ("record a flow
 called login with the variable pin = 482913"), and the saved flow says `${pin}` wherever the
@@ -118,11 +118,11 @@ You can also write or edit these files by hand. Run one from the terminal:
 
 
 ```bash
-npx droidreplay run login --var email=test@example.com
+npx moreplay run login --var email=test@example.com
 ```
 
 ```
-RUN  .droidreplay/flows/login.yaml  5 steps
+RUN  .moreplay/flows/login.yaml  5 steps
 
   ✓ launch com.example.app         234 ms
   ✓ tap "Sign in"                  148 ms
@@ -131,19 +131,19 @@ RUN  .droidreplay/flows/login.yaml  5 steps
   ✓ screenshot login-ok            170 ms
 
 PASS  5 steps in 2.1 s
-Evidence  .droidreplay/evidence/login/20261027-123950
+Evidence  .moreplay/evidence/login/20261027-123950
 ```
 
 Each step waits for its button or text to appear, so there are no fixed sleeps. The command
 exits with 0 when every step passed and 1 when one failed, so it works in CI too.
-Screenshots are saved in `.droidreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
-Commit the flows you want to keep, and add `.droidreplay/evidence/` to your `.gitignore`.
+Screenshots are saved in `.moreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
+Commit the flows you want to keep, and add `.moreplay/evidence/` to your `.gitignore`.
 
 A folder runs as a suite: every `.yaml` directly in it, by name (subfolders such as `shared/`
 hold subflows and are not run on their own). Tag flows with `tags: [smoke]` to pick some:
 
 ```bash
-npx droidreplay run e2e/mobile --include-tags smoke --var pin=$PIN --junit reports/mobile.xml
+npx moreplay run e2e/mobile --include-tags smoke --var pin=$PIN --junit reports/mobile.xml
 ```
 
 `--junit` writes a report CI systems read (GitHub Actions, GitLab, Jenkins). When a step fails,
@@ -169,8 +169,8 @@ steps:
 Already using [Maestro](https://maestro.mobile.dev)? Flows convert both ways:
 
 ```bash
-npx droidreplay export login > login.maestro.yaml
-npx droidreplay import checkout.maestro.yaml --out .droidreplay/flows/checkout.yaml
+npx moreplay export login > login.maestro.yaml
+npx moreplay import checkout.maestro.yaml --out .moreplay/flows/checkout.yaml
 ```
 
 Steps that have no equivalent on the other side are listed, never dropped silently.
@@ -198,7 +198,7 @@ timed end to end from an MCP client on the laptop. Method and raw numbers:
 
 **Speed** (lower is better)
 
-| | droidreplay | mobile-mcp 1.0.14 | plain adb |
+| | moreplay | mobile-mcp 1.0.14 | plain adb |
 |---|---|---|---|
 | Read the screen | **34-65 ms** | 1.6-2.5 s | 2.9-3.6 s |
 | First read (starts the agent) | **1.3-4 s** | 4.7 s | 2.9-3.6 s |
@@ -207,7 +207,7 @@ timed end to end from an MCP client on the laptop. Method and raw numbers:
 
 **What the model reads**
 
-| | droidreplay | mobile-mcp 1.0.14 | plain adb |
+| | moreplay | mobile-mcp 1.0.14 | plain adb |
 |---|---|---|---|
 | One screen as text | **1-2 KB** | 14 KB | 54 KB XML |
 | Tool definitions, every request | **~850 tokens** (4 tools) | ~7.5k tokens (34 tools) | n/a |
@@ -219,7 +219,7 @@ adb means `uiautomator dump`, `input tap` and `screencap`.
 
 ## Troubleshooting
 
-Run `npx -y droidreplay doctor` first; it names most problems.
+Run `npx -y moreplay doctor` first; it names most problems.
 
 - **No device found, or the device is "unauthorized"**: unplug and replug the phone, then tap **Allow** on the
   USB debugging prompt. If no prompt shows, turn USB debugging off and on again.

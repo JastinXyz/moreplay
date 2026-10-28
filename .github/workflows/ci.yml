@@ -21,5 +21,5 @@ jobs:
       - run: npm ci
       # ubuntu-latest ships an Android SDK at $ANDROID_HOME with platforms and build-tools.
       - run: npm run build
-      - run: test -s assets/droidreplay.jar
+      - run: test -s assets/moreplay.jar
       - run: npm test

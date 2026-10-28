@@ -3,6 +3,6 @@ node_modules/
 *.dex
 *.jar
 dist/
-.droidreplay/
+.moreplay/
 spike/evidence/
 .DS_Store

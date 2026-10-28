@@ -27,10 +27,10 @@ Next: dedupe the tree, `wait_for` on device, `batch`, then the TS MCP server.
 
 # Spike 2: agent v2 + MCP server, vs mobilecli (2026-10-21)
 
-Same device. droidreplay timings are end to end from an MCP client on the laptop.
+Same device. moreplay timings are end to end from an MCP client on the laptop.
 mobilecli 1.0.21 (what mobile-mcp 1.0.12 uses) timed per CLI call, with and without its daemon.
 
-| Operation | mobilecli | droidreplay |
+| Operation | mobilecli | moreplay |
 |---|---|---|
 | Read UI tree, warm | `dump ui` 2.2-3.3 s (120 KB JSON); `snapshot` 2.6-3.2 s (15 KB). Daemon: no change | `observe` 21-55 ms (2.2 KB on the calculator) |
 | Read UI tree, cold | 11 s first call | ~1-4 s (push jar + start agent) |
@@ -86,10 +86,10 @@ mobilecli 1.0.21 CLI (`npx -y mobilecli@1.0.21`, so each call also pays npx's lo
 | `snapshot` | 3,292-4,067 ms; 14.8 KB |
 | `screenshot --format jpeg` | 1,730 ms first, then 895-986 ms (to a file) |
 
-droidreplay for comparison (same day, `spike/bench.mjs`): observe 34-65 ms warm, 1.3 s cold;
+moreplay for comparison (same day, `spike/bench.mjs`): observe 34-65 ms warm, 1.3 s cold;
 screenshot to a file 150-160 ms; tool definitions 3,397 chars (~850 tokens).
 
-mobilecli now runs its own app_process server with one UiAutomation, like droidreplay, but
+mobilecli now runs its own app_process server with one UiAutomation, like moreplay, but
 waits for the UI to settle (up to 2 s, `devices/android.go`) before each dump, which is where
 its read time goes. The README compares against mobile-mcp end to end, since that is what an
 MCP user runs; taps were not re-measured (the bench scripts are read-only).

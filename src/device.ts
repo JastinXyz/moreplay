@@ -7,8 +7,8 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
-const DEVICE_JAR = "/data/local/tmp/droidreplay.jar";
-const AGENT_CLASS = "dev.droidreplay.agent.Main";
+const DEVICE_JAR = "/data/local/tmp/moreplay.jar";
+const AGENT_CLASS = "dev.moreplay.agent.Main";
 const DEVICE_PORT = 9070;
 
 // Every adb call and agent request is bounded: a wedged adb server or agent would otherwise
@@ -80,10 +80,10 @@ export function adbPath(): string {
 }
 
 function jarPath(): string {
-  for (const p of [join(here, "..", "assets", "droidreplay.jar"), join(here, "..", "agent", "build", "droidreplay.jar")]) {
+  for (const p of [join(here, "..", "assets", "moreplay.jar"), join(here, "..", "agent", "build", "moreplay.jar")]) {
     if (existsSync(p)) return p;
   }
-  throw new Error("droidreplay.jar not found; run `npm run build:agent`");
+  throw new Error("moreplay.jar not found; run `npm run build:agent`");
 }
 
 /** One connected Android device plus the agent process running on it. */

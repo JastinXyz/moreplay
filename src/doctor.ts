@@ -9,7 +9,7 @@ const XIAOMI = /xiaomi|redmi|poco/i;
 type Level = "ok" | "warn" | "fail";
 const mark: Record<Level, string> = { ok: "✓", warn: "!", fail: "✗" };
 
-/** Checks everything droidreplay needs and prints one line per check. Returns the exit code. */
+/** Checks everything moreplay needs and prints one line per check. Returns the exit code. */
 export async function doctor(): Promise<number> {
   let failed = false;
   const report = (level: Level, msg: string, hint?: string) => {
@@ -18,7 +18,7 @@ export async function doctor(): Promise<number> {
     if (hint) console.log(`    ${hint}`);
   };
 
-  console.log(`droidreplay ${VERSION} doctor\n`);
+  console.log(`moreplay ${VERSION} doctor\n`);
 
   const adb = adbPath();
   try {
@@ -60,7 +60,7 @@ export async function doctor(): Promise<number> {
   const sdk = Number(sdkStr);
   const skin = hyperos ? `HyperOS ${hyperos}` : miui ? `MIUI ${miui}` : "";
   if (sdk < 26) {
-    report("fail", `Android ${release} (API ${sdk}) is too old`, "droidreplay needs Android 8.0 (API 26) or newer.");
+    report("fail", `Android ${release} (API ${sdk}) is too old`, "moreplay needs Android 8.0 (API 26) or newer.");
     return 1;
   }
   report(sdk >= 33 ? "ok" : "warn", `${maker} ${model}, Android ${release} (API ${sdk})${skin ? `, ${skin}` : ""}`,

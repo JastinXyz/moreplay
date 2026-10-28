@@ -1,4 +1,4 @@
-# droidreplay
+# moreplay
 
 Fast Android MCP server for AI agents. A small Java agent runs on the device through
 `app_process` (no APK install) and holds one UiAutomation connection, so reading the screen
@@ -6,7 +6,7 @@ takes ~30 ms instead of ~3 s. The TypeScript MCP server on the laptop pushes and
 agent, batches steps into one request, and saves screenshots as evidence files.
 
 Goal: an open-source alternative to mobile-mcp whose edge is speed, small token footprint, and
-record once, replay without a model (`flow` tool and `droidreplay run`).
+record once, replay without a model (`flow` tool and `moreplay run`).
 
 ## Keep the docs current
 
@@ -17,26 +17,26 @@ digging through git history. If a doc says something the code no longer does, fi
 
 ## Layout
 
-- `agent/`: device-side Java agent, built into `agent/build/droidreplay.jar` (dex inside).
+- `agent/`: device-side Java agent, built into `agent/build/moreplay.jar` (dex inside).
   `build.sh` generates `Version.java` from `package.json`, and `/ping` answers `pong <version>`.
   - `Main.java`: UiAutomation bootstrap (reflection) + minimal HTTP server.
   - `Device.java`: every op (observe, tap, type, scroll, wait_*, key, screenshot).
   - `build.sh`: javac + d8 against the newest installed Android platform.
 - `src/`: TypeScript MCP server.
   - `device.ts`: adb, device selection, push/start/stop of the agent, HTTP client.
-  - `index.ts`: CLI entry (`droidreplay` = MCP server, `doctor`, `run`, `export`, `import`, `--version`, `--help`).
+  - `index.ts`: CLI entry (`moreplay` = MCP server, `doctor`, `run`, `export`, `import`, `--version`, `--help`).
   - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`, `flow`), the active
     recorder, and process lifecycle.
   - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
     agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
-  - `run-cli.ts`: `droidreplay run <flow|folder>... [--var k=v] [--evidence dir] [--include-tags]
+  - `run-cli.ts`: `moreplay run <flow|folder>... [--var k=v] [--evidence dir] [--include-tags]
     [--exclude-tags] [--junit file]` (replay with no model, exit 0/1; a folder = its top-level .yaml files, run
     one after another on one agent, then a suite summary). Prints each step live via the
     agent's streamed `/run`.
   - `report.ts`: test-runner style output for `run` (aligned ✓/✗ lines, PASS/FAIL badge;
     colors only on a TTY without `NO_COLOR`). Labels come from the flow, so `${vars}` stay hidden.
   - `maestro.ts`: flow <-> Maestro YAML (`toMaestro`, `fromMaestro`); unmapped steps are
-    returned in `skipped`. `maestro-cli.ts`: `droidreplay export` / `import`.
+    returned in `skipped`. `maestro-cli.ts`: `moreplay export` / `import`.
   - `doctor.ts`: setup checks (adb, device state, API level, UiAutomation conflicts, agent
     start, observe timing, inject permission via invisible KEYCODE_UNKNOWN).
   - `act.ts`: `act` batching (agent ops vs host ops), host ops (launch, stop_app, clear_app, apps,
@@ -48,13 +48,13 @@ digging through git history. If a doc says something the code no longer does, fi
   YAML form, recording, vars, waits, runFlow pass/fail, patch, save/load; `maestro.test.mjs`
   covers both directions, a round trip, and the export/import CLIs; `report.test.mjs` covers
   step labels, plain/colored output and the suite summary.
-- `assets/droidreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
+- `assets/moreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
 - `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
   `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;
   `e2e.mjs '<json [[tool, args], ...]>'` runs MCP calls in one server session (cwd `spike/`, so flows and
-  evidence land in `spike/.droidreplay/`; gitignored, as is `spike/evidence/` for e2e images).
+  evidence land in `spike/.moreplay/`; gitignored, as is `spike/evidence/` for e2e images).
 - `.github/`: CI workflow, PR template, bug report template. `CONTRIBUTING.md`, `LICENSE` (MIT).
 
 ## Commands
@@ -73,7 +73,7 @@ node spike/bench.mjs   # timing against a connected device (taps nothing)
 Needs `ANDROID_HOME` with a platform and build-tools for the agent build, JDK 11+, Node 20+.
 On the owner's Mac: `ANDROID_HOME=~/Library/Android/sdk` (platform 35 + build-tools 35.0.0,
 installed with Homebrew's `sdkmanager`). Server-only changes need just `npx tsc`, since
-`assets/droidreplay.jar` from the last build is reused.
+`assets/moreplay.jar` from the last build is reused.
 
 ## Working rules
 

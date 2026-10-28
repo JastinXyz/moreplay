@@ -25,7 +25,7 @@ test("exposes 4 tools and keeps their definitions small", async () => {
 
 // show and patch never touch a device either.
 test("flow show and patch take a .yaml path outside the flows folder", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  const dir = await mkdtemp(join(tmpdir(), "moreplay-"));
   const client = new Client({ name: "test", version: "0" });
   await client.connect(new StdioClientTransport({ command: "node", args: [resolve("dist/index.js")], cwd: dir }));
   try {

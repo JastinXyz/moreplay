@@ -1,4 +1,4 @@
-package dev.droidreplay.agent;
+package dev.moreplay.agent;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.UiAutomation;
@@ -23,7 +23,7 @@ import org.json.JSONObject;
 
 /**
  * Device-side agent, launched via:
- *   CLASSPATH=/data/local/tmp/droidreplay.jar app_process / dev.droidreplay.agent.Main [port]
+ *   CLASSPATH=/data/local/tmp/moreplay.jar app_process / dev.moreplay.agent.Main [port]
  * Holds one UiAutomation connection for its whole lifetime and serves a tiny HTTP API:
  *   GET  /ping                                                    -> "pong <version>"
  *   POST /run         {"steps":[{op:...}], "stopOnError":true}  -> JSON results
@@ -58,7 +58,7 @@ public final class Main {
     }
 
     private static UiAutomation connectUiAutomation() throws Exception {
-        HandlerThread thread = new HandlerThread("droidreplay-uia");
+        HandlerThread thread = new HandlerThread("moreplay-uia");
         thread.start();
         Looper looper = thread.getLooper();
 

@@ -10,6 +10,6 @@ labels: bug
 
 **Device**: model, Android version, OEM skin (HyperOS, One UI, ColorOS...)
 
-**droidreplay version / commit**:
+**moreplay version / commit**:
 
 **Agent log or error text**:

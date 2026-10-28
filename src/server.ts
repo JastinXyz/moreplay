@@ -17,7 +17,7 @@ export async function startServer(): Promise<void> {
   // Where `flow save` writes: the name or path given to `flow record`.
   let recordTarget = "";
 
-  const server = new McpServer({ name: "droidreplay", version: VERSION });
+  const server = new McpServer({ name: "moreplay", version: VERSION });
 
   const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 

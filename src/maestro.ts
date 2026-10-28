@@ -14,7 +14,7 @@ export interface Converted<T> {
 
 type Cmd = string | Record<string, unknown>;
 
-// droidreplay scrolls name where the content goes; Maestro swipes name where the finger goes.
+// moreplay scrolls name where the content goes; Maestro swipes name where the finger goes.
 const SWIPE_FOR_SCROLL: Record<string, string> = { down: "UP", up: "DOWN", right: "LEFT", left: "RIGHT" };
 const SCROLL_FOR_SWIPE = Object.fromEntries(Object.entries(SWIPE_FOR_SCROLL).map(([k, v]) => [v, k]));
 const KEY_TO_MAESTRO: Record<string, string> = { home: "Home", enter: "Enter", delete: "Backspace", tab: "Tab" };
@@ -52,12 +52,12 @@ function fromMaestroPermissions(pkg: string, perms: unknown): Step | null {
   return { op: "permissions", package: pkg, ...(grant.length ? { grant } : {}), ...(revoke.length ? { revoke } : {}) };
 }
 
-// Maestro reads every text as a regex; droidreplay only when written "/like this/".
+// Maestro reads every text as a regex; moreplay only when written "/like this/".
 // ${var} placeholders are neither escaped nor counted as regex.
 const PLACEHOLDER = /(\$\{[^}]+\})/;
 const REGEX_CHARS = /[|*+?()[\]{}^$\\]/;
 
-/** droidreplay text -> Maestro text: "/re/" as is, plain text escaped so Maestro matches it literally. */
+/** moreplay text -> Maestro text: "/re/" as is, plain text escaped so Maestro matches it literally. */
 function maestroText(v: unknown): unknown {
   if (typeof v !== "string") return v;
   if (v.length > 2 && v.startsWith("/") && v.endsWith("/")) return v.slice(1, -1);
@@ -67,13 +67,13 @@ function maestroText(v: unknown): unknown {
     .join("");
 }
 
-/** Maestro text -> droidreplay text: "/.../" when it uses regex beyond "." (a lone "." is usually just a dot). */
+/** Maestro text -> moreplay text: "/.../" when it uses regex beyond "." (a lone "." is usually just a dot). */
 function ourText(v: string): string {
   const bare = v.split(PLACEHOLDER).filter((_, i) => i % 2 === 0).join("");
   return REGEX_CHARS.test(bare) ? `/${v}/` : v;
 }
 
-/** droidreplay target -> Maestro selector; null for refs, which only exist in one session. */
+/** moreplay target -> Maestro selector; null for refs, which only exist in one session. */
 function toSelector(s: Record<string, unknown>): Record<string, unknown> | null {
   if ("ref" in s) return null;
   const sel: Record<string, unknown> = {};
@@ -137,7 +137,7 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
       const sel = toSelector(s);
       if (sel === null) return null;
       const cmds: Cmd[] = Object.keys(sel).length ? [selectorCmd("tapOn", sel, false)] : [];
-      // Maestro types at the cursor; droidreplay replaces the text unless append is set.
+      // Maestro types at the cursor; moreplay replaces the text unless append is set.
       if (s.append !== true) cmds.push("eraseText");
       cmds.push({ inputText: String(s.value ?? "") });
       if (s.submit === true) cmds.push({ pressKey: "Enter" });
@@ -257,7 +257,7 @@ function point(v: unknown): [number | string, number | string] | null {
 // Keys a Maestro selector may carry that change nothing here.
 const IGNORED_KEYS = new Set(["label", "retryTapIfNoChange", "waitToSettleTimeoutMs"]);
 
-/** Maestro selector -> droidreplay target, or a reason it has no counterpart. */
+/** Maestro selector -> moreplay target, or a reason it has no counterpart. */
 function fromSelector(v: unknown): Record<string, unknown> | string {
   if (typeof v === "string" || typeof v === "number") return { text: ourText(String(v)) };
   if (!v || typeof v !== "object") return "empty selector";
@@ -395,7 +395,7 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
         const w = (obj.when ?? {}) as Record<string, unknown>;
         const keys = Object.keys(w);
         if (keys.length === 1 && keys[0] === "true") {
-          // A ${...} condition; droidreplay evaluates the simple ones (see flow.ts evaluate).
+          // A ${...} condition; moreplay evaluates the simple ones (see flow.ts evaluate).
           step.when = { true: String(w.true) };
         } else {
           if (keys.length !== 1 || (keys[0] !== "visible" && keys[0] !== "notVisible")) throw new Error(`runFlow when ${keys.join(", ")}`);
