@@ -24,6 +24,10 @@ function target(s: Record<string, unknown>): string {
   if (s.text !== undefined) parts.push(quote(s.text));
   if (s.id !== undefined) parts.push(`#${s.id}`);
   if (s.desc !== undefined) parts.push(`desc=${quote(s.desc)}`);
+  for (const k of ["below", "above", "leftOf", "rightOf"]) {
+    const a = s[k];
+    if (a !== undefined) parts.push(`${k} ${a && typeof a === "object" ? target(a as Record<string, unknown>) : quote(a)}`);
+  }
   return parts.join(" ");
 }
 

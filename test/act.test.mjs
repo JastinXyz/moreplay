@@ -149,3 +149,11 @@ test("clear_app wipes the app with pm clear and fails loudly when it cannot", as
   assert.match(await runAct(bad, [{ op: "clear_app", package: "com.app; rm -rf /" }], opts), /invalid package name/);
   assert.deepEqual(bad.calls, []);
 });
+
+test("a target given only by position still gets the implicit act wait", () => {
+  assert.deepEqual(withActWaits([{ op: "tap", text: "A" }, { op: "tap", below: "Enter your PIN", text: "1" }, { op: "tap", above: "Finance" }]), [
+    { op: "tap", text: "A" },
+    { op: "tap", below: "Enter your PIN", text: "1", wait: 3000 },
+    { op: "tap", above: "Finance", wait: 3000 },
+  ]);
+});

@@ -100,6 +100,7 @@ name: login
     { tap: "Masuk" },
     { tap: { id: "close", optional: true } },
     { tap: { x: 10, y: 20 } },
+    { tap: { text: "Simpan", below: "Nama" } },
     { tap: "Email" },
     { type: "${email}" },
     { type: { value: "lagi", append: true } },
@@ -114,10 +115,9 @@ name: login
     { screenshot: "home" },
     { stop_app: "com.app" },
   ]);
-  assert.equal(skipped.length, 3);
+  assert.equal(skipped.length, 2);
   assert.match(skipped[0], /command 5: .*only absolute/);
-  assert.match(skipped[1], /command 6: .*selector key below/);
-  assert.match(skipped[2], /command 20: .*runFlow/);
+  assert.match(skipped[1], /command 20: .*runFlow/);
 });
 
 test("export then import keeps the flow", () => {
@@ -156,4 +156,24 @@ test("clear_app maps to clearState, and launchApp clearState to clear_app + laun
   const { out, skipped } = fromMaestro("appId: com.app\n---\n- launchApp:\n    clearState: true\n- clearState\n- clearState: com.other\n");
   assert.deepEqual(out.steps, [{ clear_app: "com.app" }, { launch: "com.app" }, { clear_app: "com.app" }, { clear_app: "com.other" }]);
   assert.deepEqual(skipped, []);
+});
+
+test("relative selectors keep Maestro's names both ways; index is still skipped", () => {
+  const { out, skipped } = fromMaestro(`appId: com.app
+---
+- tapOn:
+    text: "1"
+    below: "Enter your PIN"
+- tapOn:
+    above: Finance
+    leftOf:
+      id: menu_more
+- tapOn:
+    text: Save
+    index: 1
+`);
+  assert.deepEqual(out.steps, [{ tap: { text: "1", below: "Enter your PIN" } }, { tap: { above: "Finance", leftOf: { id: "menu_more" } } }]);
+  assert.match(skipped[0], /command 3: .*selector key index/);
+  const [, cmds] = commands(toMaestro(out, "com.app").out);
+  assert.deepEqual(cmds, [{ tapOn: { text: "1", below: "Enter your PIN" } }, { tapOn: { above: "Finance", leftOf: { id: "menu_more" } } }]);
 });

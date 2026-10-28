@@ -1,5 +1,5 @@
 import { parseAllDocuments, stringify } from "yaml";
-import type { Step } from "./act.js";
+import { RELATIVE_KEYS, type Step } from "./act.js";
 import { fromCompact, toCompact, type FlowFile } from "./flow.js";
 
 /**
@@ -32,6 +32,16 @@ function toSelector(s: Record<string, unknown>): Record<string, unknown> | null 
   else if ("desc" in s) sel.text = s.desc;
   else if ("field" in s) sel.text = s.field;
   if ("id" in s) sel.id = s.id;
+  // Same names on both sides; an anchor is plain text or a selector of its own.
+  for (const k of RELATIVE_KEYS) {
+    const a = s[k];
+    if (a === undefined) continue;
+    if (a && typeof a === "object") {
+      const inner = toSelector(a as Record<string, unknown>);
+      if (!inner) return null;
+      sel[k] = inner;
+    } else sel[k] = a;
+  }
   return sel;
 }
 
@@ -138,6 +148,11 @@ function fromSelector(v: unknown): Record<string, unknown> | string {
       if (!m) return `point ${x} (only absolute x,y)`;
       out.x = Number(m[1]);
       out.y = Number(m[2]);
+    } else if (RELATIVE_KEYS.includes(k)) {
+      const a = fromSelector(x);
+      if (typeof a === "string") return `${k}: ${a}`;
+      const keys = Object.keys(a);
+      out[k] = keys.length === 1 && keys[0] === "text" ? a.text : a;
     } else if (!IGNORED_KEYS.has(k)) return `selector key ${k}`;
   }
   return Object.keys(out).some((k) => k !== "optional") ? out : "empty selector";

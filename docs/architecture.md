@@ -55,6 +55,14 @@ contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. Whe
 is not clickable, the agent taps its nearest clickable ancestor. Optional `wait` (ms) polls a
 text/id/desc target until it appears; replays set it on every targeted step.
 
+Position keys `below` / `above` / `leftOf` / `rightOf` (Maestro's names) take another target
+(`"text"` or `{text|id|desc}`, which may nest its own position keys). Among the matches, or the
+tappable elements when the step has no text/id/desc (icons without a label), the agent keeps
+those whose center lies past that edge of every anchor, drops any that contain an anchor or sit
+inside one, and picks the nearest (sum of center distances); an exact text match still beats a
+contains match. A missing anchor counts as not found, so `wait` keeps polling for it. Keypads
+are the typical case: `tap: {text: "1", below: "Enter your PIN"}`.
+
 | op | params | where |
 |---|---|---|
 | observe | | agent |
@@ -202,7 +210,7 @@ ways (Maestro reads it from `-e var=...`).
 | droidreplay | Maestro |
 |---|---|
 | launch / stop_app / clear_app | `launchApp` / `stopApp` / `clearState` (bare when the package is the header's `appId`, which defaults to the first launched package). Import turns `launchApp: {clearState: true}` into clear_app + launch |
-| tap / long_press `text`, `desc`, `id`, `x,y` | `tapOn` / `longPressOn` with `text` (Maestro's text also matches content-desc), `id`, `point: "x,y"`; `optional` kept |
+| tap / long_press `text`, `desc`, `id`, `x,y`, position keys | `tapOn` / `longPressOn` with `text` (Maestro's text also matches content-desc), `id`, `point: "x,y"`, `below`/`above`/`leftOf`/`rightOf` (same names, anchors converted the same way); `optional` kept |
 | type `{field, value}` | `tapOn: field`, `eraseText` (unless `append`), `inputText`, `pressKey: Enter` for `submit`. Import folds `eraseText` + `inputText` back into one replacing type |
 | key back / home / enter / delete / tab | `back`, `pressKey: Home/Enter/Backspace/Tab` |
 | scroll `dir` | `scroll` for down; `swipe: {direction}` names the finger's direction, so up -> DOWN, right -> LEFT |
@@ -212,7 +220,7 @@ ways (Maestro reads it from `-e var=...`).
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
-selectors (`below`, `index`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
+selectors other than below/above/leftOf/rightOf (`index`, `childOf`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
 `runFlow`, `repeat`, scripts, `hideKeyboard` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

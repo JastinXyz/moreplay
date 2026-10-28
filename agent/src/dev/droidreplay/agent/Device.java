@@ -524,6 +524,7 @@ final class Device {
         if (n == null) throw new Missing("not found: " + describe(s));
         lastSel = new JSONObject();
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
+        for (String k : RELATIVE) if (s.has(k)) lastSel.put(k, s.opt(k));
         AccessibilityNodeInfo target = n;
         // Text usually sits on a child of the thing that is actually clickable.
         while (target != null && !target.isClickable() && !target.isEditable()) target = target.getParent();
@@ -609,12 +610,28 @@ final class Device {
         return null;
     }
 
+    /** Position keys: the target must lie on that side of another element (an anchor). */
+    static final String[] RELATIVE = {"below", "above", "leftOf", "rightOf"};
+
+    private static boolean hasRelative(JSONObject s) {
+        for (String k : RELATIVE) if (s.has(k)) return true;
+        return false;
+    }
+
+    /** An anchor is a target too: "text" or {text|id|desc}. */
+    private static JSONObject anchorSel(Object v) throws Exception {
+        if (v instanceof JSONObject) return (JSONObject) v;
+        return new JSONObject().put("text", String.valueOf(v));
+    }
+
     private AccessibilityNodeInfo find(JSONObject s) {
-        if (!s.has("text") && !s.has("id") && !s.has("desc")) {
-            throw new IllegalArgumentException("selector needs ref, x/y, text, id or desc");
+        boolean own = s.has("text") || s.has("id") || s.has("desc");
+        if (!own && !hasRelative(s)) {
+            throw new IllegalArgumentException("selector needs ref, x/y, text, id, desc, or below/above/leftOf/rightOf");
         }
         List<AccessibilityNodeInfo> all = new ArrayList<>();
         for (Win w : windows()) flatten(w.root, all);
+        if (hasRelative(s)) return findRelative(s, own, all);
         AccessibilityNodeInfo partial = null;
         for (AccessibilityNodeInfo n : all) {
             int m = match(n, s);
@@ -622,6 +639,66 @@ final class Device {
             if (m == 1 && partial == null) partial = n;
         }
         return partial;
+    }
+
+    /**
+     * Like Maestro's below/above/leftOf/rightOf: among the matches (or, with no text/id/desc,
+     * the tappable elements) on the right side of every anchor, the one closest to them. A node
+     * that contains an anchor, or sits inside it, never counts; exact text beats contains.
+     */
+    private AccessibilityNodeInfo findRelative(JSONObject s, boolean own, List<AccessibilityNodeInfo> all) {
+        List<String> keys = new ArrayList<>();
+        List<Rect> anchors = new ArrayList<>();
+        try {
+            for (String k : RELATIVE) {
+                if (!s.has(k)) continue;
+                AccessibilityNodeInfo a = find(anchorSel(s.opt(k)));
+                if (a == null) return null; // anchor not on screen (yet)
+                Rect r = new Rect();
+                a.getBoundsInScreen(r);
+                keys.add(k);
+                anchors.add(r);
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("bad anchor: " + e.getMessage());
+        }
+        AccessibilityNodeInfo best = null;
+        int bestMatch = 0;
+        double bestDist = Double.MAX_VALUE;
+        for (AccessibilityNodeInfo n : all) {
+            int m = own ? match(n, s) : (n.isClickable() ? 2 : 0);
+            if (m == 0) continue;
+            Rect b = new Rect();
+            n.getBoundsInScreen(b);
+            if (b.isEmpty()) continue;
+            double dist = 0;
+            boolean ok = true;
+            for (int i = 0; i < keys.size() && ok; i++) {
+                Rect a = anchors.get(i);
+                if (b.contains(a) || a.contains(b)) ok = false;
+                else ok = side(keys.get(i), a, b);
+                dist += Math.hypot(b.centerX() - a.centerX(), b.centerY() - a.centerY());
+            }
+            if (!ok) continue;
+            if (m > bestMatch || (m == bestMatch && dist < bestDist)) {
+                best = n;
+                bestMatch = m;
+                bestDist = dist;
+            }
+        }
+        return best;
+    }
+
+    /** Whether b's center lies past a's edge on that side. */
+    private static boolean side(String key, Rect a, Rect b) {
+        switch (key) {
+            case "below": return b.centerY() > a.bottom;
+            case "above": return b.centerY() < a.top;
+            case "leftOf": return b.centerX() < a.left;
+            default: return b.centerX() > a.right;
+        }
     }
 
     private static void flatten(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out) {
@@ -660,6 +737,12 @@ final class Device {
         StringBuilder sb = new StringBuilder();
         for (String k : new String[]{"text", "id", "desc"}) {
             if (s.has(k)) sb.append(sb.length() > 0 ? " " : "").append(k).append("=\"").append(s.optString(k)).append('"');
+        }
+        for (String k : RELATIVE) {
+            if (!s.has(k)) continue;
+            Object v = s.opt(k);
+            String a = v instanceof JSONObject ? describe((JSONObject) v) : "\"" + v + "\"";
+            sb.append(sb.length() > 0 ? " " : "").append(k).append(' ').append(a);
         }
         return sb.toString();
     }
@@ -817,7 +900,7 @@ final class Device {
     private String type(JSONObject s) throws Exception {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
-        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait"}) if (s.has(k)) sel.put(k, s.opt(k));
+        for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "below", "above", "leftOf", "rightOf"}) if (s.has(k)) sel.put(k, s.opt(k));
         if (s.has("field")) sel.put("text", s.optString("field"));
         if (sel.length() > (sel.has("wait") ? 1 : 0)) {
             tap(sel, false);
@@ -831,7 +914,7 @@ final class Device {
             field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         }
         // Web fields sometimes never report input focus after a tap; focus the matched node.
-        if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc"))) {
+        if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc") || hasRelative(sel))) {
             AccessibilityNodeInfo n = find(sel);
             if (n != null && n.isEditable()) {
                 n.performAction(AccessibilityNodeInfo.ACTION_FOCUS);

@@ -39,10 +39,10 @@ export async function startServer(): Promise<void> {
     "act",
     {
       description: [
-        "Run steps in order in ONE call; batch everything you can. Stops at the first failure (optional:true steps skip if target missing). Returns the screen afterwards.",
-        "Target (tap/long_press/type/wait_*): ref | x,y | text (also matches content-desc; exact, else contains) | id | desc.",
-        "Ops: tap, long_press{ms}, type{value, field?=label of field, submit?, append?} (no target = focused field),",
-        "scroll{dir:down|up|left|right, until?:{text|id|desc}, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
+        "Run steps in order in ONE call; batch everything you can. Stops at the first failure (optional:true skips a missing target). Returns the screen.",
+        "Target (tap/long_press/type/wait_*): ref | x,y | text (also content-desc; exact, else contains) | id | desc, plus below/above/leftOf/rightOf:<target> (nearest).",
+        "Ops: tap, long_press{ms}, type{value, field?=its label, submit?, append?} (no target = focused),",
+        "scroll{dir:down|up|left|right, until?:target, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
         "wait_for{target, timeout?=5000}, wait_gone{target, timeout?}, wait_idle{quietMs?=300, timeout?}, sleep{ms},",
         "launch{package}, stop_app{package}, clear_app{package} (wipe data), apps{filter?}, screenshot{name} (file name or path; saved, not shown), observe, windows.",
       ].join("\n"),
