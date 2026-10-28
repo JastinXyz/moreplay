@@ -167,6 +167,7 @@ test("an agent batch gets time for the waits it asks for", async () => {
   const { stepBudget } = await import("../dist/device.js");
   assert.equal(stepBudget([{ op: "tap", text: "A" }]), 0);
   assert.equal(stepBudget([{ op: "tap", text: "A", wait: 3000 }, { op: "wait_for", text: "B" }, { op: "sleep", ms: 500 }]), 3000 + 5000 + 500);
+  assert.equal(stepBudget([{ op: "tap", x: 1, y: 2, settle: 3000 }]), 3000);
   assert.equal(stepBudget([{ op: "wait_for", text: "B", timeout: 20000 }, { op: "scroll", dir: "down", max: 4 }, { op: "long_press", text: "C" }]), 20000 + 6000 + 700);
 });
 
@@ -201,7 +202,7 @@ test("uninstall_app, open_link and launch args build safe adb commands", async (
   assert.match(out, /opened myapp:\/\/item\/1\?name=it's/);
   const shells = d.calls.map((c) => c.shell).filter(Boolean);
   assert.ok(shells.includes("am start -W -a android.intent.action.VIEW -d 'myapp://item/1?name=it'\\''s' -p com.app"), shells.join("\n"));
-  assert.ok(shells.includes("am start -n 'com.app/.Main' --es user 'a b' --ei count 3 --ef ratio 1.5 --ez debug true"), shells.join("\n"));
+  assert.ok(shells.includes("am start -W -n 'com.app/.Main' --es user 'a b' --ei count 3 --ef ratio 1.5 --ez debug true"), shells.join("\n"));
 
   const err = fakeDevice({ shell: { "am start -W": "Error: Activity not started, unable to resolve Intent\n" } });
   assert.match(await runAct(err, [{ op: "open_link", url: "nope://x" }], opts), /✗ open_link \d+ms open_link nope:\/\/x: Error: Activity not started/);

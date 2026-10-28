@@ -61,7 +61,7 @@ export function describeStep(s: Step): string {
       return `type ${quote(s.value ?? "")}${into}${s.submit ? " + enter" : ""}`;
     }
     case "scroll": {
-      const until = s.until && typeof s.until === "object" ? ` until ${target(s.until as Record<string, unknown>)}` : "";
+      const until = s.until === undefined ? "" : ` until ${typeof s.until === "object" ? target(s.until as Record<string, unknown>) : quote(s.until)}`;
       return `scroll ${s.dir ?? "down"}${until}`;
     }
     case "key":

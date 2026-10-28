@@ -391,7 +391,11 @@ async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promi
       const pkg = packageOf(step);
       const activity = (await device.shell(`cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} | tail -1`)).trim();
       if (!/^[\w.$]+\/[\w.$]+$/.test(activity)) throw new Error(`no launchable activity for ${pkg} (installed? see apps)`);
-      await device.shell(`am start -n '${activity}'${extras(step.args)}`);
+      // -W returns once the activity is drawn: without it the next step could still read the app
+      // that was in front before (a wait_for matched the previous app's screen).
+      const out = await device.shell(`am start -W -n '${activity}'${extras(step.args)}`);
+      const err = /^Error.*$/m.exec(out);
+      if (err) throw new Error(`launch ${pkg}: ${err[0]}`);
       return `launched ${activity}`;
     }
     case "install_app": {

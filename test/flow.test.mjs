@@ -73,12 +73,12 @@ test("substitute fills vars and names every missing one", () => {
   assert.throws(() => substitute([{ op: "type", value: "${a} ${b}" }], { a: "1" }), /missing variable\(s\): b/);
 });
 
-test("replays wait for elements but not for coordinates", () => {
+test("replays wait for elements, and coordinate taps for the screen to settle", () => {
   assert.deepEqual(withWaits([
     { op: "tap", text: "A" }, { op: "tap", x: 1, y: 2 }, { op: "type", value: "v" }, { op: "type", field: "F", value: "v" },
     { op: "wait_for", text: "B" }, { op: "tap", text: "C", wait: 100 },
   ], 3000), [
-    { op: "tap", text: "A", wait: 3000 }, { op: "tap", x: 1, y: 2 }, { op: "type", value: "v" }, { op: "type", field: "F", value: "v", wait: 3000 },
+    { op: "tap", text: "A", wait: 3000 }, { op: "tap", x: 1, y: 2, settle: 3000 }, { op: "type", value: "v" }, { op: "type", field: "F", value: "v", wait: 3000 },
     { op: "wait_for", text: "B", timeout: 3000 }, { op: "tap", text: "C", wait: 100 },
   ]);
 });

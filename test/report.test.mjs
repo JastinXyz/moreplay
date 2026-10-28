@@ -11,6 +11,7 @@ test("steps are labelled from the flow as written", () => {
     [{ op: "tap", x: 10, y: 20 }, "tap 10,20"],
     [{ op: "type", field: "Password", value: "${password}", submit: true }, 'type "${password}" into "Password" + enter'],
     [{ op: "scroll", dir: "down", until: { text: "Logout" } }, 'scroll down until "Logout"'],
+    [{ op: "scroll", dir: "up", until: "/e2e .*/" }, 'scroll up until "/e2e .*/"'],
     [{ op: "wait_for", text: "42" }, 'wait_for "42"'],
     [{ op: "key", key: "back" }, "key back"],
     [{ op: "run_flow", file: "shared/pin.yaml" }, "run_flow shared/pin.yaml"],

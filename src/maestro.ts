@@ -150,8 +150,8 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
     }
     case "scroll": {
       const dir = String(s.dir ?? "down");
-      if (s.until && typeof s.until === "object") {
-        const sel = toSelector(s.until as Record<string, unknown>);
+      if (s.until !== undefined) {
+        const sel = toSelector(typeof s.until === "object" ? (s.until as Record<string, unknown>) : { text: s.until });
         return sel ? [{ scrollUntilVisible: { element: sel, direction: dir.toUpperCase() } }] : null;
       }
       if (dir === "down") return ["scroll"];

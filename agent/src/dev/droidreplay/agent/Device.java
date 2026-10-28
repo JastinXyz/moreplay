@@ -389,12 +389,16 @@ final class Device {
         return false;
     }
 
-    /** What a later sibling hides: its bounds, or only its content when it fills the parent. */
+    /**
+     * What a later sibling hides: its bounds, or only its content when it fills the parent. One
+     * with no content and no image hides nothing: React Native lists a background shape drawn
+     * behind (zIndex) after the header it sits under.
+     */
     private static Rect coverOf(AccessibilityNodeInfo sib, Rect sb, Rect parent) {
-        if (!sb.contains(parent)) return sb;
         Rect content = new Rect();
         contentBounds(sib, content, new int[] {COVER_SCAN_LIMIT});
-        return content;
+        if (sb.contains(parent)) return content;
+        return content.isEmpty() && !hasImage(sib, new int[] {50}) ? content : sb;
     }
 
     // How much of the parent's height a covering child's content must span to count as a screen.
@@ -540,7 +544,11 @@ final class Device {
             lastSel = selectorFor(ref);
             return new int[]{ref.x, ref.y};
         }
-        if (s.has("x") && s.has("y")) return new int[]{coord(s, "x", true), coord(s, "y", false)};
+        if (s.has("x") && s.has("y")) {
+            // Replays set "settle" (ms): no element to wait for, so wait for the screen to stop moving.
+            if (s.has("settle")) waitIdle(300, s.optInt("settle"));
+            return new int[]{coord(s, "x", true), coord(s, "y", false)};
+        }
         long wait = s.optLong("wait", 0);
         long deadline = SystemClock.uptimeMillis() + wait;
         AccessibilityNodeInfo n = find(s);
@@ -720,7 +728,7 @@ final class Device {
     /**
      * Like Maestro's below/above/leftOf/rightOf: among the matches (or, with no text/id/desc,
      * the tappable elements) on the right side of every anchor, the one closest to them. A node
-     * that contains an anchor, or sits inside it, never counts; exact text beats contains.
+     * that contains an anchor, sits inside it, or is covered never counts; exact text beats contains.
      */
     private AccessibilityNodeInfo findRelative(JSONObject s, boolean own, List<AccessibilityNodeInfo> all) {
         List<String> keys = new ArrayList<>();
@@ -756,7 +764,9 @@ final class Device {
                 else ok = side(keys.get(i), a, b);
                 dist += Math.hypot(b.centerX() - a.centerX(), b.centerY() - a.centerY());
             }
-            if (!ok) continue;
+            // A candidate hidden under a sheet or bar cannot be the one meant: skip it, or it wins
+            // as the nearest and the tap fails as covered (checked last, it walks the parents).
+            if (!ok || visibleRect(n).isEmpty()) continue;
             found.add(n);
             rank.add(new double[]{m, dist});
         }
@@ -1026,11 +1036,12 @@ final class Device {
      * target is visible. Uses the accessibility scroll action on the biggest scrollable node
      * (fast, and it reports the end of the list); falls back to a swipe when there is none.
      */
-    private String scroll(JSONObject s) {
+    private String scroll(JSONObject s) throws Exception {
         String dir = s.optString("dir", "down");
         if (!dir.matches("up|down|left|right")) throw new IllegalArgumentException("dir must be up/down/left/right");
         int max = s.optInt("max", 10);
-        JSONObject until = s.optJSONObject("until");
+        // `until: "Text"` is short for {text: "Text"}; it used to be dropped, so the scroll never checked it.
+        JSONObject until = s.has("until") ? anchorSel(s.get("until")) : null;
         String how = "swipe";
 
         for (int i = 0; i <= max; i++) {
