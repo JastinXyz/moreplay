@@ -5,6 +5,13 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
+Upgrading from 0.1: flows that passed may now fail early where they used to pass by accident.
+A `${NAME}` passed empty (`--var NAME=`) now fails before the run; test optional vars with
+`${!!NAME}`. A `type` into a field that refuses the text now fails at that step. Taps are
+roughly 100-200 ms slower because they wait for a still target.
+
 - Screens raised with zIndex (React Native) are read in their real stacking order. A PIN lock
   over the home screen was hidden from `observe` and from selectors, so a tap meant for the home
   behind it landed on the lock's keypad.
@@ -67,5 +74,6 @@ First release.
 - `moreplay export` / `import` convert flows to and from Maestro YAML.
 - `moreplay doctor` checks adb, the device and the agent.
 
-[Unreleased]: https://github.com/JastinXyz/moreplay/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/JastinXyz/moreplay/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/JastinXyz/moreplay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/JastinXyz/moreplay/releases/tag/v0.1.0
