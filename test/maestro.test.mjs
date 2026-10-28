@@ -158,7 +158,7 @@ test("clear_app maps to clearState, and launchApp clearState to clear_app + laun
   assert.deepEqual(skipped, []);
 });
 
-test("relative selectors keep Maestro's names both ways; index is still skipped", () => {
+test("relative selectors and index keep Maestro's names both ways", () => {
   const { out, skipped } = fromMaestro(`appId: com.app
 ---
 - tapOn:
@@ -172,10 +172,18 @@ test("relative selectors keep Maestro's names both ways; index is still skipped"
     text: Save
     index: 1
 `);
-  assert.deepEqual(out.steps, [{ tap: { text: "1", below: "Enter your PIN" } }, { tap: { above: "Finance", leftOf: { id: "menu_more" } } }]);
-  assert.match(skipped[0], /command 3: .*selector key index/);
+  assert.deepEqual(out.steps, [
+    { tap: { text: "1", below: "Enter your PIN" } },
+    { tap: { above: "Finance", leftOf: { id: "menu_more" } } },
+    { tap: { text: "Save", index: 1 } },
+  ]);
+  assert.deepEqual(skipped, []);
   const [, cmds] = commands(toMaestro(out, "com.app").out);
-  assert.deepEqual(cmds, [{ tapOn: { text: "1", below: "Enter your PIN" } }, { tapOn: { above: "Finance", leftOf: { id: "menu_more" } } }]);
+  assert.deepEqual(cmds, [
+    { tapOn: { text: "1", below: "Enter your PIN" } },
+    { tapOn: { above: "Finance", leftOf: { id: "menu_more" } } },
+    { tapOn: { text: "Save", index: 1 } },
+  ]);
 });
 
 test("Maestro regex text becomes /re/ and back; plain text and ${vars} stay literal", () => {
@@ -242,5 +250,39 @@ test("runFlow maps to run_flow both ways: file, env, when and inline commands", 
     { runFlow: "shared/keypad-pin.yaml" },
     { runFlow: { file: "shared/keypad-pin.yaml", env: { PIN: "${PIN}", PROMPT: "Enter your PIN" } } },
     { runFlow: { when: { visible: { text: "Dismiss" } }, commands: [{ tapOn: "Dismiss" }, "back"] } },
+  ]);
+});
+
+test("repeat and hideKeyboard map both ways", () => {
+  const { out, skipped } = fromMaestro(`appId: com.app
+---
+- repeat:
+    while:
+      visible:
+        id: onboarding-button
+    times: 6
+    commands:
+      - tapOn:
+          id: onboarding-button
+- repeat:
+    times: 2
+    commands:
+      - scroll
+- hideKeyboard
+- repeat:
+    commands:
+      - back
+`);
+  assert.deepEqual(out.steps, [
+    { repeat: { times: 6, while: { visible: { id: "onboarding-button" } }, steps: [{ tap: { id: "onboarding-button" } }] } },
+    { repeat: { times: 2, steps: [{ scroll: "down" }] } },
+    { hide_keyboard: {} },
+  ]);
+  assert.match(skipped[0], /command 4: .*repeat needs times or while/);
+  const [, cmds] = commands(toMaestro(out, "com.app").out);
+  assert.deepEqual(cmds, [
+    { repeat: { times: 6, while: { visible: { id: "onboarding-button" } }, commands: [{ tapOn: { id: "onboarding-button" } }] } },
+    { repeat: { times: 2, commands: ["scroll"] } },
+    "hideKeyboard",
   ]);
 });

@@ -67,6 +67,9 @@ inside one, and picks the nearest (sum of center distances); an exact text match
 contains match. A missing anchor counts as not found, so `wait` keeps polling for it. Keypads
 are the typical case: `tap: {text: "1", below: "Enter your PIN"}`.
 
+`index: n` (0-based) picks the n-th match: in reading order (top to bottom, then left to right;
+exact matches if any, else contains), or with position keys in nearest-first order.
+
 | op | params | where |
 |---|---|---|
 | observe | | agent |
@@ -78,6 +81,7 @@ are the typical case: `tap: {text: "1", below: "Enter your PIN"}`.
 | wait_for / wait_gone | target, `timeout` | agent (polls every 40 ms) |
 | wait_idle | `quietMs`, `timeout` | agent (tree unchanged for quietMs) |
 | sleep | `ms` | agent |
+| hide_keyboard | | agent (back while the input-method window is listed, then waits up to 1.5 s for it to go; a no-op when none is shown) |
 | windows | | agent (debug: every window the system reports, with type/layer/title) |
 | launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`) |
 | apps | `filter` | server (`pm list packages -3`) |
@@ -210,6 +214,9 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   names the inner step (`step 2 (tap) failed: ...`); nesting stops at 8 levels so a flow that
   runs itself fails instead of looping. `act` takes run_flow too, with files relative to the
   server's working directory.
+- **Loops** (`repeat`, a host op): `steps` run up to `times`, while `while: {visible | notVisible:
+  target}` holds (checked before each round, like run_flow's `when`). `while` alone stops after
+  100 rounds with an error rather than looping forever. A failure names the round and step.
 - **Self-heal**: on failure the tool returns the 1-based step number, the step, the screen, and
   a `flow patch` hint. `patch{name, index, steps}` replaces that step (`steps: []` deletes).
 
@@ -232,10 +239,11 @@ ways (Maestro reads it from `-e var=...`).
 | swipe x1..y2 | `swipe: {start, end, duration}` (absolute points only on import) |
 | wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
+| repeat, hide_keyboard, `index` | `repeat: {times, while: {visible / notVisible}, commands}`, `hideKeyboard`, selector `index` (0-based on both sides) |
 | run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: ...}` expressions are skipped, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
-selectors other than below/above/leftOf/rightOf (`index`, `childOf`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
-`repeat`, scripts, `hideKeyboard`, `when: {true / platform}` (import). observe/apps/windows export to nothing.
+selectors other than below/above/leftOf/rightOf/index (`childOf`, `containsChild`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
+scripts, `when: {true / platform}` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

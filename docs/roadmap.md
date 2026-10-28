@@ -38,7 +38,8 @@ or may not be kept, dev-build overlays) to be imported or recorded and replayed 
 - [x] Regex text (`"/A|B/"`), for waits on one of several screens and partly known text
 - [x] Conditional steps (`when: visible / not visible`) for screens that only sometimes appear
 - [x] Subflows with parameters (`run_flow{file, vars}`), e.g. a shared PIN keypad flow
-- [ ] `repeat while visible`, `hide_keyboard`, `index` selector, tags to include/exclude flows
+- [x] `repeat` (times / while visible), `hide_keyboard`, `index` selector
+- [ ] Run a folder of flows as a suite, with tags to include/exclude flows
 
 ## Quality
 

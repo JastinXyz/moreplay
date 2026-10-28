@@ -26,6 +26,7 @@ function target(s: Record<string, unknown>): string {
   if (s.text !== undefined) parts.push(quote(s.text));
   if (s.id !== undefined) parts.push(`#${s.id}`);
   if (s.desc !== undefined) parts.push(`desc=${quote(s.desc)}`);
+  if (s.index !== undefined) parts.push(`[${s.index}]`);
   for (const k of ["below", "above", "leftOf", "rightOf"]) {
     const a = s[k];
     if (a !== undefined) parts.push(`${k} ${a && typeof a === "object" ? target(a as Record<string, unknown>) : quote(a)}`);
@@ -55,6 +56,13 @@ export function describeStep(s: Step): string {
       return `sleep ${s.ms} ms`;
     case "screenshot":
       return s.name ? `screenshot ${s.name}` : "screenshot";
+    case "repeat": {
+      const n = Array.isArray(s.steps) ? s.steps.length : 0;
+      const w = (s.while ?? null) as Record<string, unknown> | null;
+      const k = w && ("notVisible" in w ? "notVisible" : "visible");
+      const cond = w && k ? ` while ${k} ${w[k] && typeof w[k] === "object" ? target(w[k] as Record<string, unknown>) : quote(w[k])}` : "";
+      return `repeat ${n} steps${s.times !== undefined ? ` ${s.times}x` : ""}${cond}`;
+    }
     case "run_flow": {
       const what = typeof s.file === "string" ? s.file : `${Array.isArray(s.steps) ? s.steps.length : 0} steps`;
       const w = (s.when ?? null) as Record<string, unknown> | null;
