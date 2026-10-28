@@ -10,7 +10,7 @@ Let an AI assistant use your Android phone. It can read the screen, tap, type an
 once it has done a task, you can save the steps and replay them later without the AI.
 
 moreplay is an [MCP](https://modelcontextprotocol.io) server: a plugin that gives AI apps
-such as Claude Code, Claude Desktop or Cursor new tools. This one gives them an Android phone.
+such as Claude Code, Codex, Cursor, VS Code or Gemini CLI new tools. This one gives them an Android phone.
 
 - **Fast.** Reading the screen takes about 50 ms, not the usual 3 seconds.
 - **Cheap on tokens.** A screen is 1-2 KB of text, and the tools add only ~850 tokens to each request.
@@ -48,14 +48,17 @@ fine; a ✗ comes with a hint on how to fix it.
 
 ### 4. Add it to your AI app
 
-**Claude Code**
+Any app that supports MCP can use moreplay. Pick yours:
+
+**Claude Code, Codex CLI**: one command.
 
 ```bash
 claude mcp add moreplay -- npx -y moreplay
+codex mcp add moreplay -- npx -y moreplay
 ```
 
-**Claude Desktop, Cursor and other MCP apps**: add this to the app's MCP config file
-(Claude Desktop: Settings > Developer > Edit Config; Cursor: `.cursor/mcp.json`):
+**Claude Desktop, Cursor, Windsurf, Gemini CLI, Cline and most other apps**: add this to the
+app's MCP config file.
 
 ```json
 {
@@ -68,7 +71,44 @@ claude mcp add moreplay -- npx -y moreplay
 }
 ```
 
+| App | Where the config lives |
+|---|---|
+| Claude Desktop | Settings > Developer > Edit Config |
+| Cursor | `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project) |
+| Windsurf | Cascade panel > MCP servers > Configure |
+| Gemini CLI | `~/.gemini/settings.json` (all projects) or `.gemini/settings.json` (one project) |
+| Cline | MCP Servers > Configure MCP Servers |
+
+**VS Code (GitHub Copilot)**: uses `servers` instead of `mcpServers`. Put this in
+`.vscode/mcp.json`, then use Copilot Chat in Agent mode:
+
+```json
+{
+  "servers": {
+    "moreplay": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "moreplay"]
+    }
+  }
+}
+```
+
 Restart the app, and you are done.
+
+**npx, or install it?** The configs above use `npx`, which downloads moreplay the first time and
+needs no install step. You can install it instead:
+
+| How | Command | Good for |
+|---|---|---|
+| npx (default) | nothing to install | trying it, MCP configs |
+| Global | `npm i -g moreplay` | using the `moreplay` command every day; starts faster |
+| In a project | `npm i -D moreplay` | a test suite in a repo: the version is pinned in `package-lock.json`, so everyone and CI run the same one |
+
+With a global install, use `"command": "moreplay", "args": []` in the config (or
+`claude mcp add moreplay -- moreplay`). If you use nvm, desktop apps may not see its `PATH`;
+give the full path from `which moreplay` instead. In a project, `npx moreplay ...` picks the
+installed version, with no download.
 
 ### 5. Try it
 
@@ -86,7 +126,7 @@ does not pick the other:
 - "With moreplay, check what is on the screen and save a screenshot to ./shots/home.jpg."
 
 Only one of them can control the phone at a time. If moreplay says another tool holds the
-connection, turn the other MCP server off in your AI app (in Claude Code: `/mcp`), or ask the
+connection, turn the other MCP server off in your AI app's MCP settings (in Claude Code: `/mcp`), or ask the
 assistant to stop using it.
 
 Nothing is installed on the phone. A small agent (17 KB) is copied to `/data/local/tmp` and
