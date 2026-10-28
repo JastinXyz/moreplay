@@ -1,13 +1,25 @@
 import { dirname, relative, resolve } from "node:path";
 import { Device } from "./device.js";
-import { EVIDENCE_DIR, FLOWS_DIR, fromCompact, loadFlow, runFlow } from "./flow.js";
-import { Reporter, useColor } from "./report.js";
+import { collectFlows, EVIDENCE_DIR, FLOWS_DIR, fromCompact, loadFlow, pickByTags, runFlow, type FlowFile } from "./flow.js";
+import { Reporter, suiteSummary, useColor } from "./report.js";
 
-/** `droidreplay run <flow> [--var k=v]... [--evidence dir]`: replays a flow with no model involved. */
+const USAGE =
+  "usage: droidreplay run <flow name, .yaml path or folder>... [--var key=value]... [--evidence dir]\n" +
+  "                       [--include-tags a,b] [--exclude-tags c]";
+
+const tagList = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
+
+/**
+ * `droidreplay run <flow|folder>... [--var k=v]... [--evidence dir] [--include-tags a,b]
+ * [--exclude-tags c]`: replays flows with no model involved, one after another on one agent.
+ * Exit 0 when every flow that ran passed, 1 when one failed (or none matched), 2 on bad usage.
+ */
 export async function runCli(args: string[]): Promise<number> {
   const vars: Record<string, string> = {};
-  let target: string | undefined;
+  const targets: string[] = [];
   let evidenceDir = resolve(EVIDENCE_DIR);
+  let include: string[] = [];
+  let exclude: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--var") {
@@ -18,41 +30,66 @@ export async function runCli(args: string[]): Promise<number> {
         return 2;
       }
       vars[kv.slice(0, eq)] = kv.slice(eq + 1);
-    } else if (a === "--evidence") {
-      const dir = args[++i];
-      if (!dir) {
-        console.error("--evidence needs a folder");
+    } else if (a === "--evidence" || a === "--include-tags" || a === "--exclude-tags") {
+      const v = args[++i];
+      if (!v) {
+        console.error(`${a} needs a value`);
         return 2;
       }
-      evidenceDir = resolve(dir);
-    } else if (!target) {
-      target = a;
-    } else {
-      console.error(`unexpected argument: ${a}`);
+      if (a === "--evidence") evidenceDir = resolve(v);
+      else if (a === "--include-tags") include = tagList(v);
+      else exclude = tagList(v);
+    } else if (a.startsWith("--")) {
+      console.error(`unknown option: ${a}`);
       return 2;
+    } else {
+      targets.push(a);
     }
   }
-  if (!target) {
-    console.error("usage: droidreplay run <flow name or .yaml path> [--var key=value]... [--evidence dir]");
+  if (!targets.length) {
+    console.error(USAGE);
     return 2;
   }
 
-  const device = new Device();
+  const color = useColor(process.stdout);
+  const near = (p: string) => (relative(process.cwd(), p).startsWith("..") ? p : relative(process.cwd(), p) || p);
+  let flows: { path: string; flow: FlowFile }[];
   try {
-    const { path, flow } = await loadFlow(resolve(FLOWS_DIR), target);
-    // Labels come from the flow as written, so ${secrets} are not printed.
-    const near = (p: string) => (relative(process.cwd(), p).startsWith("..") ? p : relative(process.cwd(), p) || p);
-    const rep = new Reporter(flow.steps.map(fromCompact), useColor(process.stdout));
-    console.log(rep.header(near(path)));
-    const result = await runFlow(device, flow, { vars, evidenceDir, dir: dirname(path), onStep: (i, r) => console.log(rep.step(i, r)) });
-    if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
-    const evidence = result.shots ? near(result.evidenceDir) : undefined;
-    console.log(rep.footer(result.ok, result.secs, { failedStep: result.failedStep, evidence }));
-    return result.ok ? 0 : 1;
+    const paths = await collectFlows(targets, resolve(FLOWS_DIR));
+    flows = await Promise.all(paths.map((p) => loadFlow(resolve(FLOWS_DIR), p)));
   } catch (e) {
     console.error((e as Error).message);
     return 1;
+  }
+  const { run, skipped } = pickByTags(flows, include, exclude);
+  if (!run.length) {
+    console.error(`no flows to run (${flows.length} found, ${skipped.length} skipped by tags)`);
+    return 1;
+  }
+
+  const device = new Device();
+  const t0 = Date.now();
+  const results: { name: string; ok: boolean; failedStep?: number }[] = [];
+  try {
+    for (const { path, flow } of run) {
+      // Labels come from the flow as written, so ${secrets} are not printed.
+      const rep = new Reporter(flow.steps.map(fromCompact), color);
+      console.log(rep.header(near(path)));
+      try {
+        const result = await runFlow(device, flow, { vars, evidenceDir, dir: dirname(path), onStep: (i, r) => console.log(rep.step(i, r)) });
+        if (result.failedStep) for (const l of rep.notRun(result.failedStep)) console.log(l);
+        const evidence = result.shots ? near(result.evidenceDir) : undefined;
+        console.log(rep.footer(result.ok, result.secs, { failedStep: result.failedStep, evidence }));
+        results.push({ name: near(path), ok: result.ok, failedStep: result.failedStep });
+      } catch (e) {
+        // A flow that cannot start (a missing ${var}, no device) fails; the rest still run.
+        console.log(`  ${(e as Error).message}`);
+        results.push({ name: near(path), ok: false });
+      }
+    }
   } finally {
     device.stop();
   }
+  if (run.length > 1 || skipped.length) console.log(suiteSummary(results, skipped.length, ((Date.now() - t0) / 1000).toFixed(1), color));
+  return results.every((r) => r.ok) ? 0 : 1;
 }

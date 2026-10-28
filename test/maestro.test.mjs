@@ -286,3 +286,10 @@ test("repeat and hideKeyboard map both ways", () => {
     "hideKeyboard",
   ]);
 });
+
+test("Maestro header tags become flow tags and back", () => {
+  const { out } = fromMaestro("appId: com.app\ntags:\n  - smoke\n  - v3\n---\n- launchApp\n");
+  assert.deepEqual(out, { name: "maestro", tags: ["smoke", "v3"], steps: [{ launch: "com.app" }] });
+  const [header] = commands(toMaestro(out).out);
+  assert.deepEqual(header, { appId: "com.app", name: "maestro", tags: ["smoke", "v3"] });
+});

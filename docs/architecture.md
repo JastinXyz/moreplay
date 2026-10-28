@@ -194,6 +194,13 @@ scroll -> dir, tap/long_press/wait_for/wait_gone -> text, type -> value, apps ->
   before anything runs), and the recorder writes every occurrence of a value (3+ chars,
   longest first) back as `${var}` (`hideVars`), also when the model typed the value itself.
   So a recorded login never holds the PIN; replay takes it from `vars` / `--var`.
+- **Suites** (`droidreplay run` only): several targets, and a folder stands for the `.yaml` files
+  directly in it, sorted by name (subfolders hold subflows). A flow's `tags: [...]` meet
+  `--include-tags` (any of them) and `--exclude-tags` (none of them). Flows run one after
+  another on one agent; a flow that cannot start (a missing `${var}`) fails and the rest still
+  run. With more than one flow, or any skipped by tags, a summary closes the run (`PASS  3
+  flows: 2 passed, 1 skipped by tags`, failed flows listed). Exit 1 if any failed or none
+  matched. Maestro header `tags` map to flow `tags` both ways.
 - **Replay** (`flow run`, or `droidreplay run` with no model): `${var}` substitution (missing
   vars fail before anything runs), `wait: 5000` on targeted steps and `timeout: 5000` on
   wait_for/wait_gone, then one `executeSteps`. Screenshot steps first wait for the screen to

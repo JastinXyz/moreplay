@@ -79,6 +79,24 @@ export function describeStep(s: Step): string {
 const MAX_LABEL = 48;
 const clip = (s: string) => (s.length > MAX_LABEL ? `${s.slice(0, MAX_LABEL - 1)}…` : s);
 
+/** Last lines of a run over several flows: totals and the flows that failed. */
+export function suiteSummary(
+  results: { name: string; ok: boolean; failedStep?: number }[],
+  skipped: number,
+  secs: string,
+  color: boolean,
+): string {
+  const paint = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t);
+  const failed = results.filter((r) => !r.ok);
+  const parts = [`${results.length - failed.length} passed`];
+  if (failed.length) parts.push(`${failed.length} failed`);
+  if (skipped) parts.push(`${skipped} skipped by tags`);
+  const badge = failed.length ? (color ? paint("97;41", " FAIL ") : "FAIL") : color ? paint("30;42", " PASS ") : "PASS";
+  const lines = ["", `${badge}  ${results.length + skipped} flows: ${parts.join(", ")} in ${secs} s`];
+  for (const f of failed) lines.push(`  ${paint("31", "✗")} ${f.name}${f.failedStep ? ` (step ${f.failedStep})` : ""}`);
+  return lines.join("\n");
+}
+
 export class Reporter {
   private readonly labels: string[];
   private readonly width: number;

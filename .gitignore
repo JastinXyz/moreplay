@@ -5,3 +5,4 @@ node_modules/
 dist/
 .droidreplay/
 spike/evidence/
+.DS_Store

@@ -39,7 +39,7 @@ or may not be kept, dev-build overlays) to be imported or recorded and replayed 
 - [x] Conditional steps (`when: visible / not visible`) for screens that only sometimes appear
 - [x] Subflows with parameters (`run_flow{file, vars}`), e.g. a shared PIN keypad flow
 - [x] `repeat` (times / while visible), `hide_keyboard`, `index` selector
-- [ ] Run a folder of flows as a suite, with tags to include/exclude flows
+- [x] Run a folder of flows as a suite, with tags to include/exclude flows
 
 ## Quality
 

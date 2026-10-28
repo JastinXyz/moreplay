@@ -139,6 +139,13 @@ exits with 0 when every step passed and 1 when one failed, so it works in CI too
 Screenshots are saved in `.droidreplay/evidence/<flow>/<time>/` (or pass `--evidence <folder>`).
 Commit the flows you want to keep, and add `.droidreplay/evidence/` to your `.gitignore`.
 
+A folder runs as a suite: every `.yaml` directly in it, by name (subfolders such as `shared/`
+hold subflows and are not run on their own). Tag flows with `tags: [smoke]` to pick some:
+
+```bash
+npx droidreplay run e2e/mobile --include-tags smoke --var pin=$PIN
+```
+
 If a step breaks after the app changes, ask the assistant to run the flow. It sees which step
 failed and the screen at that moment, and can fix that step for you.
 

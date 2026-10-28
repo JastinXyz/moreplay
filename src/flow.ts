@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { executeSteps, RELATIVE_KEYS, screen, type ActDevice, type Step, type Subflows } from "./act.js";
@@ -16,6 +16,8 @@ export interface FlowFile {
   name: string;
   /** Tapped whenever they show up while a step waits: interstitial closes, permission prompts. */
   dismiss?: (string | Record<string, unknown>)[];
+  /** For picking flows out of a folder: `droidreplay run dir --include-tags smoke`. */
+  tags?: string[];
   steps: Record<string, unknown>[];
 }
 
@@ -278,6 +280,37 @@ export async function runFlow(device: ActDevice, flow: FlowFile, opts: RunFlowOp
     tail.push(`Fix it with flow {action: "patch", name: "${flow.name}", index: ${n}, steps: [...]}, then run again.`);
   }
   return done(false, n);
+}
+
+/**
+ * Flow files for `droidreplay run`: a folder stands for the .yaml files directly in it, sorted
+ * by name (subfolders hold subflows, so they are not run on their own); anything else is a flow
+ * name or path as usual.
+ */
+export async function collectFlows(targets: string[], flowsDir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const t of targets) {
+    const isDir = await stat(t).then((s) => s.isDirectory(), () => false);
+    if (!isDir) {
+      out.push(resolve(flowPath(flowsDir, t)));
+      continue;
+    }
+    const files = (await readdir(t)).filter((f) => /\.ya?ml$/.test(f)).sort();
+    out.push(...files.map((f) => resolve(t, f)));
+  }
+  return out;
+}
+
+/** Splits flows by tags: any `include` tag (when given) and no `exclude` tag runs. */
+export function pickByTags<T extends { flow: FlowFile }>(flows: T[], include: string[], exclude: string[]): { run: T[]; skipped: T[] } {
+  const run: T[] = [];
+  const skipped: T[] = [];
+  for (const f of flows) {
+    const tags = f.flow.tags ?? [];
+    const ok = (!include.length || include.some((t) => tags.includes(t))) && !exclude.some((t) => tags.includes(t));
+    (ok ? run : skipped).push(f);
+  }
+  return { run, skipped };
 }
 
 /** A run_flow file: a path (`.yaml` optional) relative to the calling flow's folder. */
