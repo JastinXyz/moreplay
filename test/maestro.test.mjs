@@ -27,6 +27,7 @@ test("export maps steps to Maestro commands", () => {
       { scroll: "down" },
       { scroll: "up" },
       { scroll: { dir: "down", until: { text: "Keluar" } } },
+      { scroll: { dir: "up", until: "Atas" } },
       { wait_for: { text: "Beranda", timeout: 8000 } },
       { wait_gone: "Memuat" },
       { screenshot: "home" },
@@ -52,6 +53,7 @@ test("export maps steps to Maestro commands", () => {
     "scroll",
     { swipe: { direction: "DOWN" } },
     { scrollUntilVisible: { element: { text: "Keluar" }, direction: "DOWN" } },
+    { scrollUntilVisible: { element: { text: "Atas" }, direction: "UP" } },
     { extendedWaitUntil: { visible: { text: "Beranda" }, timeout: 8000 } },
     { extendedWaitUntil: { notVisible: { text: "Memuat" } } },
     { takeScreenshot: "home" },
@@ -60,7 +62,7 @@ test("export maps steps to Maestro commands", () => {
   assert.equal(skipped.length, 3);
   assert.match(skipped[0], /^dismiss/);
   assert.match(skipped[1], /step 5: .*ref/);
-  assert.match(skipped[2], /step 17: .*sleep/);
+  assert.match(skipped[2], /step 18: .*sleep/);
 });
 
 test("export needs an appId when the flow launches nothing", () => {

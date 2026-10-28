@@ -45,7 +45,7 @@ export function stepBudget(steps: object[]): number {
     if (s.op === "wait_for" || s.op === "wait_gone" || s.op === "wait_idle") ms += num("timeout", 5000);
     else if (s.op === "sleep" || s.op === "long_press") ms += num("ms", s.op === "sleep" ? 0 : 700);
     else if (s.op === "scroll") ms += num("max", 10) * 1500;
-    ms += num("wait");
+    ms += num("wait") + num("settle");
   }
   return ms;
 }

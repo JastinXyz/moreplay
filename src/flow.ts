@@ -44,6 +44,8 @@ const TARGETED = new Set(["tap", "long_press", "type"]);
 const SELECTOR_KEYS = ["ref", "x", "y", "text", "id", "desc", "field", ...RELATIVE_KEYS, ...NESTED_KEYS];
 
 export const DEFAULT_WAIT_MS = 5000;
+/** How long a replayed coordinate tap may wait for the screen to stop moving (a page sliding in). */
+export const SETTLE_MS = 3000;
 
 // Defaults, relative to where the server or CLI runs; callers can pass their own paths.
 export const FLOWS_DIR = ".droidreplay/flows";
@@ -225,10 +227,15 @@ export function substitute(steps: Step[], vars: Record<string, string>): Step[] 
   return out;
 }
 
-/** Replays wait for each element instead of relying on fixed sleeps. */
+/**
+ * Replays wait for each element instead of relying on fixed sleeps. A coordinate tap has no
+ * element to wait for, so it waits for the screen to settle: tapped while a new page still
+ * slides in, it lands on nothing.
+ */
 export function withWaits(steps: Step[], waitMs = DEFAULT_WAIT_MS): Step[] {
   return steps.map((s) => {
     if (TARGETED.has(s.op) && SELECTOR_KEYS.some((k) => k in s && k !== "x" && k !== "y") && !("wait" in s)) return { ...s, wait: waitMs };
+    if ((s.op === "tap" || s.op === "long_press") && "x" in s && "y" in s && !("settle" in s)) return { ...s, settle: SETTLE_MS };
     if ((s.op === "wait_for" || s.op === "wait_gone") && !("timeout" in s)) return { ...s, timeout: waitMs };
     return s;
   });
