@@ -293,3 +293,43 @@ test("Maestro header tags become flow tags and back", () => {
   const [header] = commands(toMaestro(out).out);
   assert.deepEqual(header, { appId: "com.app", name: "maestro", tags: ["smoke", "v3"] });
 });
+
+test("openLink, launchApp arguments/permissions, setPermissions and killApp map across", () => {
+  const { out, skipped } = fromMaestro(`appId: com.app
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      notifications: deny
+    arguments:
+      user: tester
+      count: 3
+- openLink: myapp://item/1
+- openLink:
+    link: https://example.com
+- setPermissions:
+    permissions:
+      all: allow
+- killApp
+`);
+  assert.deepEqual(out.steps, [
+    { clear_app: "com.app" },
+    { permissions: { package: "com.app", grant: ["CAMERA"], revoke: ["POST_NOTIFICATIONS"] } },
+    { launch: { package: "com.app", args: { user: "tester", count: 3 } } },
+    { open_link: { url: "myapp://item/1" } },
+    { open_link: { url: "https://example.com" } },
+    { permissions: { package: "com.app", grant: "all" } },
+    { stop_app: "com.app" },
+  ]);
+  assert.deepEqual(skipped, []);
+  const [, cmds] = commands(toMaestro({ name: "x", steps: [...out.steps, { install_app: { path: "app.apk" } }] }).out);
+  assert.deepEqual(cmds.slice(0, 6), [
+    "clearState",
+    { setPermissions: { permissions: { CAMERA: "allow", POST_NOTIFICATIONS: "deny" } } },
+    { launchApp: { arguments: { user: "tester", count: 3 } } },
+    { openLink: "myapp://item/1" },
+    { openLink: "https://example.com" },
+    { setPermissions: { permissions: { all: "allow" } } },
+  ]);
+});

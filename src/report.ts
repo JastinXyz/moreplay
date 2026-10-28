@@ -38,9 +38,16 @@ function target(s: Record<string, unknown>): string {
 export function describeStep(s: Step): string {
   const t = target(s);
   switch (s.op) {
+    case "install_app":
+      return `install_app ${s.path}`;
+    case "open_link":
+      return `open_link ${s.url}`;
+    case "permissions":
+      return `permissions ${s.package}${s.grant !== undefined ? ` +${[s.grant].flat().join(",")}` : ""}${s.revoke !== undefined ? ` -${[s.revoke].flat().join(",")}` : ""}`;
     case "launch":
     case "stop_app":
     case "clear_app":
+    case "uninstall_app":
       return `${s.op} ${s.package}`;
     case "type": {
       const into = s.field !== undefined ? ` into ${quote(s.field)}` : t ? ` into ${t}` : "";

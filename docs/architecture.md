@@ -93,6 +93,10 @@ exact matches if any, else contains), or with position keys in nearest-first ord
 | windows | | agent (debug: every window the system reports, with type/layer/title) |
 | launch / stop_app / clear_app | `package` (validated as a package name before it reaches `adb shell`) | server (`cmd package resolve-activity` + `am start`, `am force-stop`, `pm clear`; clear_app fails unless pm answers `Success`) |
 | apps | `filter` | server (`pm list packages -3`) |
+| launch `args` | `{name: value}` intent extras: booleans `--ez`, integers `--ei`, other numbers `--ef`, the rest `--es` (single-quoted; names `[\w.-]+`) | server |
+| install_app / uninstall_app | `path` (relative to the working directory), `grant` (`-g`, every runtime permission) / `package` | server (`adb install -r`, 5 min limit; `pm uninstall`); both fail unless the answer is `Success` |
+| open_link | `url` (one line, single-quoted), optional `package` | server (`am start -W -a VIEW -d`; an `Error:` line fails the step) |
+| permissions | `package`, `grant` (names or `"all"`), `revoke`; `CAMERA` means `android.permission.CAMERA` | server (`pm grant/revoke`; `all` = the app's requested permissions from `dumpsys package`, skipping the ones pm refuses) |
 | screenshot | `name`: a file name (saved in `.droidreplay/evidence`, made safe) or a path (absolute or with a slash, used as given; `.jpg` added) | server |
 
 The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server ops, executes them in order,
@@ -255,10 +259,11 @@ ways (Maestro reads it from `-e var=...`).
 | wait_for / wait_gone | `extendedWaitUntil: {visible / notVisible, timeout}`; import also maps `assertVisible` / `assertNotVisible` |
 | wait_idle, screenshot | `waitForAnimationToEnd`, `takeScreenshot` |
 | repeat, hide_keyboard, `index` | `repeat: {times, while: {visible / notVisible}, commands}`, `hideKeyboard`, selector `index` (0-based on both sides) |
+| launch args, open_link, permissions | `launchApp: {arguments, permissions}`, `openLink` (url or `{link}`), `setPermissions`, `killApp` -> stop_app. Maestro permission names (`camera`, `location`, `notifications`, ...) map to Android's; export writes the Android names. install/uninstall have no Maestro command and are listed as skipped |
 | run_flow | `runFlow` (a bare file, or `file` / `env` / `commands` / `when: {visible / notVisible}`); `when: {true: ...}` expressions are skipped, and a `commands` block converts whole or not at all |
 
 Not mapped: refs, `sleep`, keycodes and recents, the `dismiss` list (export); relative
-selectors other than below/above/leftOf/rightOf/index (`childOf`, `containsChild`, ...), percent points, other `launchApp` options (`permissions`, `arguments`, ...),
+selectors other than below/above/leftOf/rightOf/index (`childOf`, `containsChild`, ...), percent points, other `launchApp` options (`stopApp: false`, ...),
 scripts, `when: {true / platform}` (import). observe/apps/windows export to nothing.
 Maestro matches `text` as a regex, droidreplay as exact-then-contains, so a label with regex
 characters may match differently after a conversion.

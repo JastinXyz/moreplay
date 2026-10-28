@@ -22,6 +22,36 @@ const KEY_FROM_MAESTRO: Record<string, string> = { home: "home", enter: "enter",
 
 const brief = (v: unknown) => JSON.stringify(v);
 
+// Maestro's permission names -> Android's (short form, as the permissions op takes them).
+const MAESTRO_PERMISSIONS: Record<string, string[]> = {
+  camera: ["CAMERA"],
+  microphone: ["RECORD_AUDIO"],
+  location: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+  notifications: ["POST_NOTIFICATIONS"],
+  contacts: ["READ_CONTACTS", "WRITE_CONTACTS"],
+  calendar: ["READ_CALENDAR", "WRITE_CALENDAR"],
+  phone: ["CALL_PHONE", "READ_PHONE_STATE"],
+  sms: ["READ_SMS", "SEND_SMS", "RECEIVE_SMS"],
+  bluetooth: ["BLUETOOTH_CONNECT", "BLUETOOTH_SCAN"],
+  medialibrary: ["READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_EXTERNAL_STORAGE"],
+};
+
+/** Maestro `permissions: {camera: allow, all: deny}` -> a permissions step, or null when empty. */
+function fromMaestroPermissions(pkg: string, perms: unknown): Step | null {
+  if (!perms || typeof perms !== "object") return null;
+  const grant: string[] = [];
+  const revoke: string[] = [];
+  for (const [name, v] of Object.entries(perms as Record<string, unknown>)) {
+    const to = String(v) === "allow" ? grant : revoke;
+    if (name === "all") {
+      if (to === revoke) throw new Error("permissions all: deny");
+      return { op: "permissions", package: pkg, grant: "all" };
+    }
+    to.push(...(MAESTRO_PERMISSIONS[name] ?? [name.includes(".") ? name : name.toUpperCase()]));
+  }
+  return { op: "permissions", package: pkg, ...(grant.length ? { grant } : {}), ...(revoke.length ? { revoke } : {}) };
+}
+
 // Maestro reads every text as a regex; droidreplay only when written "/like this/".
 // ${var} placeholders are neither escaped nor counted as regex.
 const PLACEHOLDER = /(\$\{\w+\})/;
@@ -81,8 +111,19 @@ function stepToMaestro(s: Step, appId: string): Cmd[] | null {
     return sel && Object.keys(sel).length ? [selectorCmd(name, sel, optional)] : null;
   };
   switch (s.op) {
-    case "launch":
-      return [s.package === appId ? "launchApp" : { launchApp: { appId: s.package } }];
+    case "launch": {
+      if (s.args === undefined) return [s.package === appId ? "launchApp" : { launchApp: { appId: s.package } }];
+      return [{ launchApp: { ...(s.package === appId ? {} : { appId: s.package }), arguments: s.args } }];
+    }
+    case "open_link":
+      return [{ openLink: s.url }];
+    case "permissions": {
+      const perms: Record<string, string> = {};
+      if (s.grant === "all") perms.all = "allow";
+      else for (const p of [s.grant ?? []].flat()) perms[String(p)] = "allow";
+      for (const p of [s.revoke ?? []].flat()) perms[String(p)] = "deny";
+      return [{ setPermissions: { ...(s.package === appId ? {} : { appId: s.package }), permissions: perms } }];
+    }
     case "stop_app":
       return [s.package === appId ? "stopApp" : { stopApp: s.package }];
     case "clear_app":
@@ -241,13 +282,26 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
   };
   switch (name) {
     case "launchApp": {
-      const extra = Object.keys(obj).filter((k) => k !== "appId" && k !== "clearState");
+      const extra = Object.keys(obj).filter((k) => !["appId", "clearState", "permissions", "arguments"].includes(k));
       if (extra.length) throw new Error(`launchApp ${extra.join(", ")}`);
       const pkg = app(arg);
-      return [...(obj.clearState === true ? [{ op: "clear_app", package: pkg }] : []), { op: "launch", package: pkg }];
+      const perms = fromMaestroPermissions(pkg, obj.permissions);
+      const launch: Step = { op: "launch", package: pkg, ...(obj.arguments && typeof obj.arguments === "object" ? { args: obj.arguments } : {}) };
+      return [...(obj.clearState === true ? [{ op: "clear_app", package: pkg }] : []), ...(perms ? [perms] : []), launch];
+    }
+    case "setPermissions": {
+      const perms = fromMaestroPermissions(app(obj.appId), obj.permissions);
+      if (!perms) throw new Error("setPermissions needs permissions");
+      return [perms];
+    }
+    case "openLink": {
+      const url = typeof arg === "string" ? arg : String(obj.link ?? "");
+      if (!url) throw new Error("openLink needs a link");
+      return [{ op: "open_link", url }];
     }
     case "clearState":
       return [{ op: "clear_app", package: app(arg) }];
+    case "killApp":
     case "stopApp":
       return [{ op: "stop_app", package: app(arg) }];
     case "tapOn":

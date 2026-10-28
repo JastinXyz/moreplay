@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { RunResult, StepResult } from "./device.js";
 
 /** What `act` needs from a device; `Device` implements it, tests pass a fake. */
@@ -7,12 +8,16 @@ export interface ActDevice {
   run(steps: object[], stopOnError?: boolean, onResult?: (r: StepResult) => void): Promise<RunResult>;
   shell(cmd: string): Promise<string>;
   screenshot(max: number, quality: number): Promise<Buffer>;
+  /** `adb install -r` (with `-g` to grant every runtime permission); returns adb's answer. */
+  install(apk: string, grantAll: boolean): Promise<string>;
 }
 
 export type Step = { op: string } & Record<string, unknown>;
 
 // Ops handled on the laptop side; everything else goes to the on-device agent in one request.
-export const HOST_OPS = new Set(["launch", "stop_app", "clear_app", "apps", "screenshot", "run_flow", "repeat"]);
+export const HOST_OPS = new Set([
+  "launch", "stop_app", "clear_app", "install_app", "uninstall_app", "open_link", "permissions", "apps", "screenshot", "run_flow", "repeat",
+]);
 
 // How long the tree must stay unchanged before a screenshot step captures it.
 const SETTLE_MS = 400;
@@ -223,15 +228,95 @@ function packageOf(step: Step): string {
   return pkg;
 }
 
+/** Single-quotes a value for `adb shell`. */
+const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** `args: {name: value}` as intent extras: booleans --ez, integers --ei, other numbers --ef, the rest --es. */
+function extras(args: unknown): string {
+  if (args === undefined) return "";
+  if (!args || typeof args !== "object" || Array.isArray(args)) throw new Error("launch args must be {name: value}");
+  return Object.entries(args as Record<string, unknown>)
+    .map(([k, v]) => {
+      if (!/^[\w.-]+$/.test(k)) throw new Error(`launch arg name not allowed: ${k}`);
+      if (typeof v === "boolean") return ` --ez ${k} ${v}`;
+      if (typeof v === "number") return Number.isInteger(v) ? ` --ei ${k} ${v}` : ` --ef ${k} ${v}`;
+      return ` --es ${k} ${quote(String(v))}`;
+    })
+    .join("");
+}
+
+const PERMISSION_RE = /^[A-Za-z][\w.]*$/;
+const fullPermission = (p: string) => (p.includes(".") ? p : `android.permission.${p}`);
+
+/** permissions{package, grant?: [names] | "all", revoke?: [names]}; short names get android.permission. */
+async function permissions(device: ActDevice, step: Step): Promise<string> {
+  const pkg = packageOf(step);
+  const list = (v: unknown) => (v === undefined ? [] : Array.isArray(v) ? v.map(String) : [String(v)]);
+  let grant = list(step.grant);
+  const revoke = list(step.revoke);
+  if (!grant.length && !revoke.length) throw new Error("permissions needs grant or revoke");
+  let all = false;
+  if (grant.length === 1 && grant[0] === "all") {
+    // Every permission the app asks for; pm refuses the ones that are not runtime, which is fine.
+    all = true;
+    const dump = await device.shell(`dumpsys package ${pkg}`);
+    const requested = /requested permissions:\n((?:[ \t]+[\w.]+(?:: [^\n]*)?\n)+)/.exec(dump)?.[1] ?? "";
+    grant = [...new Set(requested.split("\n").map((l) => l.trim().split(":")[0]).filter(Boolean))];
+  }
+  const done: string[] = [];
+  for (const [verb, names] of [["grant", grant], ["revoke", revoke]] as const) {
+    for (const name of names) {
+      if (!PERMISSION_RE.test(name)) throw new Error(`permission name not allowed: ${name}`);
+      const perm = fullPermission(name);
+      const out = await device.shell(`pm ${verb} ${pkg} ${perm} 2>&1; true`);
+      if (/Exception|Error|not a changeable|Unknown permission/i.test(out)) {
+        if (all) continue;
+        // pm prints a header line, then the exception that says why.
+        const lines = out.trim().split("\n");
+        throw new Error(`pm ${verb} ${perm}: ${(lines.find((l) => /Exception: /.test(l)) ?? lines[0]).trim()}`);
+      }
+      done.push(`${verb === "grant" ? "+" : "-"}${perm.replace(/^android\.permission\./, "")}`);
+    }
+  }
+  return `${pkg} ${done.join(" ") || "(nothing changed)"}`;
+}
+
 async function hostOp(device: ActDevice, step: Step, evidenceDir: string): Promise<string> {
   switch (step.op) {
     case "launch": {
       const pkg = packageOf(step);
       const activity = (await device.shell(`cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ${pkg} | tail -1`)).trim();
       if (!/^[\w.$]+\/[\w.$]+$/.test(activity)) throw new Error(`no launchable activity for ${pkg} (installed? see apps)`);
-      await device.shell(`am start -n '${activity}'`);
+      await device.shell(`am start -n '${activity}'${extras(step.args)}`);
       return `launched ${activity}`;
     }
+    case "install_app": {
+      const path = resolve(String(step.path ?? ""));
+      if (!step.path || !existsSync(path)) throw new Error(`install_app: no file at ${path}`);
+      const out = await device.install(path, step.grant === true);
+      if (!/Success/.test(out)) throw new Error(`install failed: ${out.trim().split("\n").pop()}`);
+      return `installed ${basename(path)}`;
+    }
+    case "uninstall_app": {
+      const pkg = packageOf(step);
+      const out = await device.shell(`pm uninstall ${pkg}`).then(
+        (o) => o.trim(),
+        (e: Error) => e.message.trim().split("\n").pop() ?? "",
+      );
+      if (out !== "Success") throw new Error(`pm uninstall ${pkg}: ${out || "no answer"}`);
+      return `uninstalled ${pkg}`;
+    }
+    case "open_link": {
+      const url = String(step.url ?? "");
+      if (!url || /[\r\n]/.test(url)) throw new Error("open_link needs a one-line url");
+      const pkg = step.package === undefined ? "" : ` -p ${packageOf(step)}`;
+      const out = await device.shell(`am start -W -a android.intent.action.VIEW -d ${quote(url)}${pkg}`);
+      const err = /^Error.*$/m.exec(out);
+      if (err) throw new Error(`open_link ${url}: ${err[0]}`);
+      return `opened ${url}`;
+    }
+    case "permissions":
+      return permissions(device, step);
     case "stop_app": {
       const pkg = packageOf(step);
       await device.shell(`am force-stop ${pkg}`);
