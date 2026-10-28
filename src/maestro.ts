@@ -1,5 +1,5 @@
 import { parseAllDocuments, stringify } from "yaml";
-import { RELATIVE_KEYS, type Step } from "./act.js";
+import { NESTED_KEYS, RELATIVE_KEYS, STATE_KEYS, type Step } from "./act.js";
 import { fromCompact, toCompact, type FlowFile } from "./flow.js";
 
 /**
@@ -77,15 +77,16 @@ function ourText(v: string): string {
 function toSelector(s: Record<string, unknown>): Record<string, unknown> | null {
   if ("ref" in s) return null;
   const sel: Record<string, unknown> = {};
-  if ("x" in s && "y" in s) sel.point = `${s.x},${s.y}`;
+  if ("x" in s && "y" in s) sel.point = `${s.x},${s.y}`; // "50%" stays "50%,..." as Maestro writes it
   // Maestro's text matches content-desc too.
   if ("text" in s) sel.text = maestroText(s.text);
   else if ("desc" in s) sel.text = maestroText(s.desc);
   else if ("field" in s) sel.text = maestroText(s.field);
   if ("id" in s) sel.id = s.id;
   if ("index" in s) sel.index = s.index;
+  for (const k of STATE_KEYS) if (k in s) sel[k] = s[k];
   // Same names on both sides; an anchor is plain text or a selector of its own.
-  for (const k of RELATIVE_KEYS) {
+  for (const k of [...RELATIVE_KEYS, ...NESTED_KEYS]) {
     const a = s[k];
     if (a === undefined) continue;
     if (a && typeof a === "object") {
@@ -240,6 +241,14 @@ export function toMaestro(flow: FlowFile, appId?: string): Converted<string> {
   return { out: `${header}---\n${stringify(cmds, { lineWidth: 0 })}`, skipped };
 }
 
+/** "120,340" -> [120, 340]; "50%,90%" -> ["50%", "90%"] (the agent resolves percentages). */
+function point(v: unknown): [number | string, number | string] | null {
+  const m = /^\s*(\d+(?:\.\d+)?%?)\s*,\s*(\d+(?:\.\d+)?%?)\s*$/.exec(String(v));
+  if (!m) return null;
+  const one = (p: string) => (p.endsWith("%") ? p : Number(p));
+  return [one(m[1]), one(m[2])];
+}
+
 // Keys a Maestro selector may carry that change nothing here.
 const IGNORED_KEYS = new Set(["label", "retryTapIfNoChange", "waitToSettleTimeoutMs"]);
 
@@ -254,11 +263,11 @@ function fromSelector(v: unknown): Record<string, unknown> | string {
     else if (k === "index") out.index = Number(x);
     else if (k === "optional") out.optional = x === true;
     else if (k === "point") {
-      const m = /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(String(x));
-      if (!m) return `point ${x} (only absolute x,y)`;
-      out.x = Number(m[1]);
-      out.y = Number(m[2]);
-    } else if (RELATIVE_KEYS.includes(k)) {
+      const p = point(x);
+      if (!p) return `point ${x}`;
+      [out.x, out.y] = p;
+    } else if (STATE_KEYS.includes(k)) out[k] = x === true;
+    else if (RELATIVE_KEYS.includes(k) || NESTED_KEYS.includes(k)) {
       const a = fromSelector(x);
       if (typeof a === "string") return `${k}: ${a}`;
       const keys = Object.keys(a);
@@ -327,12 +336,11 @@ function cmdToSteps(name: string, arg: unknown, appId: string | undefined): Step
         if (!dir) throw new Error(`swipe direction ${obj.direction}`);
         return [{ op: "scroll", dir }];
       }
-      const pt = (v: unknown) => /^\s*(\d+)\s*,\s*(\d+)\s*$/.exec(String(v));
-      const a = pt(obj.start);
-      const b = pt(obj.end);
-      if (!a || !b) throw new Error("swipe (only absolute start/end)");
+      const a = point(obj.start);
+      const b = point(obj.end);
+      if (!a || !b) throw new Error(`swipe start/end: ${obj.start} -> ${obj.end}`);
       const ms = obj.duration ?? 250;
-      return [{ op: "swipe", x1: +a[1], y1: +a[2], x2: +b[1], y2: +b[2], ms }];
+      return [{ op: "swipe", x1: a[0], y1: a[1], x2: b[0], y2: b[1], ms }];
     }
     case "scrollUntilVisible": {
       const until = fromSelector(obj.element);
