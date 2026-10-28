@@ -41,6 +41,31 @@ or may not be kept, dev-build overlays) to be imported or recorded and replayed 
 - [x] `repeat` (times / while visible), `hide_keyboard`, `index` selector
 - [x] Run a folder of flows as a suite, with tags to include/exclude flows
 
+## Daily-use completeness (from a 2026-10 look at mobile-mcp/mobilecli, Maestro, Appium MCP, DroidRun)
+
+What users of those tools reach for or complain about. Before launch:
+
+- [x] Timeouts on every adb call and agent request (mobile-mcp hangs on a call with no timeout, #438)
+- [ ] Re-measure the README benchmark against current mobilecli/mobile-mcp: mobilecli now also
+      runs an app_process server with one UiAutomation, so the old 2.2-3.3 s figure may be stale
+- [ ] `install_app` / uninstall, `open_link` (deep links), runtime permissions, launch arguments
+- [ ] Logcat filtered by package/level and capped for tokens; attach a crash when the app died mid-step
+- [ ] `run --junit report.xml`, and a screenshot + screen dump saved automatically for a failed step
+- [ ] Percent points (`x: "50%"`) and percent swipes, so flows survive other screen sizes
+- [ ] State selectors `enabled` / `checked` / `selected` / `focused`, plus `childOf` / `containsChild`
+
+After launch:
+
+- [ ] Screen recording as evidence; double tap, drag, pinch
+- [ ] Orientation, location mocking, clipboard, dark mode
+- [ ] Several devices: `--device` per run, sharding a suite across devices
+- [ ] One-command setup for MCP clients (`npx droidreplay install claude`)
+- [ ] WebView DOM over CDP for debuggable WebViews
+- [ ] `act` returning only what changed on screen, to save tokens
+
+Not planned for now: iOS, JavaScript in flows (`evalScript`, `${expr}`), AI assertions, cloud
+devices, a screenshot-only (vision) mode for apps with no accessibility tree.
+
 ## Quality
 
 - [x] Faster scroll (directional scroll actions, end-of-list detection), ~2x faster per scroll
