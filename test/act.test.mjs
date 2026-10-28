@@ -127,7 +127,7 @@ test("selector steps after the first wait briefly for their element; refs and po
     { op: "tap", x: 1, y: 2 },
     { op: "tap", text: "A", wait: 0 },
   ]);
-  assert.deepEqual(out.map((s) => s.wait), [undefined, 3000, 3000, undefined, undefined, 0]);
+  assert.deepEqual(out.map((s) => s.wait), [1000, 3000, 3000, undefined, undefined, 0]);
 });
 
 test("recording gets the steps as given, without the implicit wait", async () => {
@@ -157,7 +157,7 @@ test("clear_app wipes the app with pm clear and fails loudly when it cannot", as
 
 test("a target given only by position still gets the implicit act wait", () => {
   assert.deepEqual(withActWaits([{ op: "tap", text: "A" }, { op: "tap", below: "Enter your PIN", text: "1" }, { op: "tap", above: "Finance" }]), [
-    { op: "tap", text: "A" },
+    { op: "tap", text: "A", wait: 1000 },
     { op: "tap", below: "Enter your PIN", text: "1", wait: 3000 },
     { op: "tap", above: "Finance", wait: 3000 },
   ]);

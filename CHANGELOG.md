@@ -5,6 +5,16 @@ in 0.x, a minor bump (0.x.0) may break things and a patch (0.x.y) only fixes the
 
 ## [Unreleased]
 
+- `type {field}` finds filled fields too (by hint), and fields by the label right above them.
+  It used to fail with "no focused text field" once a field had a value.
+- A selector tap closes the keyboard first when the target is not a field, so apps that spend
+  the first tap on closing it (React Native) no longer need two taps.
+- A selector tap waits for its target to stop moving (a list closing, a calendar sliding up)
+  before tapping. Costs roughly 100-200 ms per tap.
+- The first targeted step in `act` waits up to 1 s for its element (an empty screen right after
+  the agent restarted failed it at once).
+- No partial-match note when a regex matched inside a label.
+
 - Recording saves steps inside `repeat` and `run_flow` in the short form (`- tap: A`, not
   `- op: tap`).
 - `moreplay run` shows how many rounds a `repeat` ran (`ran 0x` in yellow).

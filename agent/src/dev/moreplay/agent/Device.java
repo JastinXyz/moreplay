@@ -41,6 +41,10 @@ final class Device {
     private final Map<Integer, Ref> refs = new HashMap<>();
     // Stable selector of the element the current step acted on, reported so flows can be recorded.
     private JSONObject lastSel;
+    // A selector tap waits until its target has kept the same bounds this long (at most STABLE_MAX_MS).
+    private static final long STABLE_MS = 60;
+    private static final long STABLE_POLL_MS = 25;
+    private static final long STABLE_MAX_MS = 1500;
     // What a selector tap hit, for its output: the element's label, and whether only a contains
     // match was found ("1" hitting "Order 1000" before the screen with a plain "1" opened).
     private String lastHit;
@@ -571,6 +575,47 @@ final class Device {
             r = target == null ? new Rect() : visibleRect(target);
         }
         if (n == null) throw new Missing("not found: " + describe(s));
+        // React Native spends a tap made while the keyboard is up on closing it (ScrollView's
+        // default keyboardShouldPersistTaps), so a search result needed two taps. Close the
+        // keyboard first unless the target is a field, then find the target again.
+        if (target != null && !target.isEditable()) {
+            windows();
+            if (keyboardShown) {
+                try {
+                    hideKeyboard();
+                } catch (IllegalStateException ignored) {
+                    // still shown: tap anyway
+                }
+                n = find(s);
+                target = tapTarget(n);
+                r = target == null ? new Rect() : visibleRect(target);
+                if (n == null) throw new Missing("not found after closing the keyboard: " + describe(s));
+            }
+        }
+        // A target still moving (a list closing above it, a calendar sliding up as the keyboard
+        // hides) would be tapped where it was: wait until it stays put for STABLE_MS.
+        // Refreshing the one node is cheap; a full find() per poll made every tap ~0.5 s slower.
+        long settleEnd = SystemClock.uptimeMillis() + STABLE_MAX_MS;
+        long stableSince = SystemClock.uptimeMillis();
+        Rect bounds = new Rect();
+        if (target != null) target.getBoundsInScreen(bounds);
+        while (target != null && !r.isEmpty() && SystemClock.uptimeMillis() - stableSince < STABLE_MS && SystemClock.uptimeMillis() < settleEnd) {
+            SystemClock.sleep(STABLE_POLL_MS);
+            Rect cur = new Rect();
+            if (!target.refresh()) {
+                // The node went away (re-rendered): find the target again.
+                n = find(s);
+                target = tapTarget(n);
+                if (target == null) break;
+            }
+            target.getBoundsInScreen(cur);
+            if (!cur.equals(bounds)) {
+                bounds = cur;
+                stableSince = SystemClock.uptimeMillis();
+            }
+        }
+        if (n == null || target == null) throw new Missing("not found: " + describe(s));
+        r = visibleRect(target);
         lastHit = describeHit(n, s);
         lastSel = new JSONObject();
         for (String k : new String[]{"text", "id", "desc"}) if (s.has(k)) lastSel.put(k, s.optString(k));
@@ -598,7 +643,8 @@ final class Device {
         if (label.length() > 40) label = label.substring(0, 40) + "…";
         String out = label.isEmpty() ? "" : "\"" + label + "\"";
         String key = s.has("text") ? "text" : s.has("desc") ? "desc" : null;
-        if (key != null && match(n, s) == 1) out += (out.isEmpty() ? "" : " ") + "(partial match for \"" + s.optString(key) + "\")";
+        // A regex matching inside a label is what the regex says, not a surprise worth flagging.
+        if (key != null && !isRegex(s.optString(key).trim()) && match(n, s) == 1) out += (out.isEmpty() ? "" : " ") + "(partial match for \"" + s.optString(key) + "\")";
         return out.isEmpty() ? null : out;
     }
 
@@ -1160,8 +1206,23 @@ final class Device {
         AccessibilityNodeInfo field;
         JSONObject sel = new JSONObject();
         for (String k : new String[]{"ref", "x", "y", "id", "desc", "wait", "index", "below", "above", "leftOf", "rightOf", "enabled", "checked", "selected", "focused", "childOf", "containsChild"}) if (s.has(k)) sel.put(k, s.opt(k));
-        if (s.has("field")) sel.put("text", s.optString("field"));
-        if (sel.length() > (sel.has("wait") ? 1 : 0)) {
+        AccessibilityNodeInfo labelled = null;
+        if (s.has("field")) {
+            // A filled field's text is its value, not its hint, so a plain text selector missed it.
+            String label = s.optString("field");
+            long until = SystemClock.uptimeMillis() + s.optLong("wait", 0);
+            labelled = findField(label);
+            while (labelled == null && SystemClock.uptimeMillis() < until) {
+                SystemClock.sleep(POLL_MS);
+                clearCacheEvery(CLEAR_EVERY_MS);
+                labelled = findField(label);
+            }
+            if (labelled == null) throw new Missing("no text field for \"" + label + "\" (by hint, text, or a label above it)");
+            Rect r = visibleRect(labelled);
+            if (r.isEmpty()) throw new Missing("text field \"" + label + "\" is covered (scroll it into view)");
+            tap(new JSONObject().put("x", r.centerX()).put("y", r.centerY()), false);
+            SystemClock.sleep(150);
+        } else if (sel.length() > (sel.has("wait") ? 1 : 0)) {
             tap(sel, false);
             SystemClock.sleep(150);
         }
@@ -1173,6 +1234,10 @@ final class Device {
             field = automation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         }
         // Web fields sometimes never report input focus after a tap; focus the matched node.
+        if ((field == null || !field.isEditable()) && labelled != null) {
+            labelled.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+            field = labelled;
+        }
         if ((field == null || !field.isEditable()) && (sel.has("text") || sel.has("id") || sel.has("desc") || hasRelative(sel) || sel.has("childOf") || sel.has("containsChild"))) {
             AccessibilityNodeInfo n = find(sel);
             if (n != null && n.isEditable()) {
@@ -1189,6 +1254,49 @@ final class Device {
         if (!field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) throw new IllegalStateException("set text failed");
         if (s.optBoolean("submit", false)) key("enter");
         return "typed " + value.length() + " chars";
+    }
+
+    /**
+     * The text field a `field` label means, best first: an editable whose hint matches exactly
+     * (filled or not), one whose text matches exactly, the nearest editable below an exact label
+     * ("Location *" above the field), then contains matches of hint and text.
+     */
+    private AccessibilityNodeInfo findField(String label) {
+        List<AccessibilityNodeInfo> all = new ArrayList<>();
+        for (Win w : windows()) flatten(w.root, all);
+        AccessibilityNodeInfo byText = null, caption = null, partHint = null, partText = null;
+        for (AccessibilityNodeInfo n : all) {
+            if (n.isEditable()) {
+                int h = textScore(n.getHintText(), null, label);
+                if (h == 2) return n;
+                if (h == 1 && partHint == null) partHint = n;
+                int t = textScore(n.getText(), n.getContentDescription(), label);
+                if (t == 2 && byText == null) byText = n;
+                if (t == 1 && partText == null) partText = n;
+            } else if (caption == null && textScore(n.getText(), n.getContentDescription(), label) == 2) {
+                caption = n;
+            }
+        }
+        if (byText != null) return byText;
+        if (caption != null) {
+            Rect c = new Rect();
+            caption.getBoundsInScreen(c);
+            AccessibilityNodeInfo best = null;
+            int bestGap = Integer.MAX_VALUE;
+            for (AccessibilityNodeInfo n : all) {
+                if (!n.isEditable()) continue;
+                Rect r = visibleRect(n);
+                int gap = r.top - c.bottom;
+                // Below the label (a little overlap allowed) and sharing some of its width.
+                if (r.isEmpty() || gap < -c.height() / 2 || r.right <= c.left || r.left >= c.right) continue;
+                if (gap < bestGap) {
+                    bestGap = gap;
+                    best = n;
+                }
+            }
+            if (best != null) return best;
+        }
+        return partHint != null ? partHint : partText;
     }
 
     private String key(String name) {

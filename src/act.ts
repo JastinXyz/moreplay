@@ -32,11 +32,17 @@ export const STATE_KEYS = ["enabled", "checked", "selected", "focused"];
 // A step that opens a sheet or a screen returns before its content is in the tree, so the
 // next tap in the same batch would miss it.
 const ACT_WAIT_MS = 3000;
+// The first step's element is normally on the screen the model just read, but right after the
+// agent (re)started (another `moreplay run` took the device meanwhile) the tree can still be
+// empty for a moment, which failed a tap in 11 ms. A short wait covers that and still fails fast.
+const ACT_FIRST_WAIT_MS = 1000;
 
-/** Lets every selector-targeted step after the first wait briefly for its element. */
+/** Lets every selector-targeted step wait briefly for its element; the first one shorter. */
 export function withActWaits(steps: Step[]): Step[] {
   return steps.map((s, i) =>
-    i > 0 && TARGETED.has(s.op) && !("wait" in s) && ["text", "id", "desc", "field", ...RELATIVE_KEYS, ...NESTED_KEYS].some((k) => k in s) ? { ...s, wait: ACT_WAIT_MS } : s,
+    TARGETED.has(s.op) && !("wait" in s) && ["text", "id", "desc", "field", ...RELATIVE_KEYS, ...NESTED_KEYS].some((k) => k in s)
+      ? { ...s, wait: i > 0 ? ACT_WAIT_MS : ACT_FIRST_WAIT_MS }
+      : s,
   );
 }
 

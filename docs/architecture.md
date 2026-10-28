@@ -81,8 +81,19 @@ Each step is `{"op": "...", ...}`. Targets for tap/long_press/type/wait_*:
 `ref` (from the latest observe) | `x`,`y` | `text` (text or content-desc, exact first, then
 contains, case-insensitive) | `id` (full or the part after `:id/`) | `desc`. When the matched node
 is not clickable, the agent taps its nearest clickable ancestor. A selector tap reports what it
-hit: `tapped 540,886 "Order 1000" (partial match for "1")`; the partial note shows when the
-text only matched inside a longer label (the recorder still reads the coordinates first). Optional `wait` (ms) polls a
+hit: `tapped 540,886 "Order 1000" (partial match for "1")`; the partial note shows when plain
+text only matched inside a longer label, never for a regex (the recorder still reads the
+coordinates first). Before tapping, a selector tap (1) closes the keyboard when it is up and
+the target is not a field, then finds the target again: React Native spends a tap made while
+the keyboard is up on closing it, so a search result needed two taps; (2) waits until the
+target's bounds stay the same for 60 ms (refreshing that one node, at most 1.5 s), so a target
+still moving (a list closing above it, a calendar sliding up as the keyboard hides) is not
+tapped where it was. That costs roughly 100-200 ms per tap.
+
+`type {field}` finds the field by, best first: an editable whose hint matches exactly (filled
+or not; a filled field's text is its value), one whose text matches exactly, the nearest
+editable below an exact label (`Location *` above the field), then contains matches of hint and
+text. It taps the field's center to focus it. Optional `wait` (ms) polls a
 text/id/desc target until it appears, is not covered (a splash screen or a sheet still on top) and is enabled (a submit button the app enables once it has handled the input; one still disabled at the timeout is tapped anyway, as in Maestro, and an explicit `enabled` selector is not waited on); replays set it on every targeted step. A coordinate tap has no element to wait for, so replays give it `settle` (3 s) instead: it waits until the screen stops changing (300 ms quiet), since a tap while a page still slides in lands on nothing. When the cover is another app's window, the error names it (`is behind a dialog from <package> ("...")`).
 
 Text (and desc) written `"/like this/"` is a regex, case-insensitive, compiled once per
@@ -135,7 +146,8 @@ The `act` tool (`src/act.ts`) splits a batch into runs of agent ops and server o
 stops at the first failure, then (unless `observe_after: false`) waits for idle and appends the
 screen. Every tap/long_press/type after the first that targets `text`, `id`, `desc` or `field`
 gets `wait: 3000`, because a step that opens a sheet returns before the sheet's content is in
-the tree. `ref` and `x,y` targets do not wait, and recording keeps the steps as given.
+the tree. The first one gets `wait: 1000`: right after the agent restarts (a `moreplay run` took
+the device meanwhile) the tree can be empty for a moment. `ref` and `x,y` targets do not wait, and recording keeps the steps as given.
 
 ## Observe format
 
