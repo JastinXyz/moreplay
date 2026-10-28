@@ -157,3 +157,10 @@ test("a target given only by position still gets the implicit act wait", () => {
     { op: "tap", above: "Finance", wait: 3000 },
   ]);
 });
+
+test("an agent batch gets time for the waits it asks for", async () => {
+  const { stepBudget } = await import("../dist/device.js");
+  assert.equal(stepBudget([{ op: "tap", text: "A" }]), 0);
+  assert.equal(stepBudget([{ op: "tap", text: "A", wait: 3000 }, { op: "wait_for", text: "B" }, { op: "sleep", ms: 500 }]), 3000 + 5000 + 500);
+  assert.equal(stepBudget([{ op: "wait_for", text: "B", timeout: 20000 }, { op: "scroll", dir: "down", max: 4 }, { op: "long_press", text: "C" }]), 20000 + 6000 + 700);
+});

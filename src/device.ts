@@ -11,6 +11,30 @@ const DEVICE_JAR = "/data/local/tmp/droidreplay.jar";
 const AGENT_CLASS = "dev.droidreplay.agent.Main";
 const DEVICE_PORT = 9070;
 
+// Every adb call and agent request is bounded: a wedged adb server or agent would otherwise
+// hang the MCP client with no answer at all.
+const ADB_TIMEOUT_MS = 30_000;
+const PUSH_TIMEOUT_MS = 120_000;
+const IMAGE_TIMEOUT_MS = 20_000;
+const RUN_BASE_MS = 30_000;
+
+/**
+ * How long a batch may take on the device: the waits, timeouts and sleeps it asks for, plus
+ * defaults for steps that wait on their own (wait_for/wait_gone/wait_idle 5 s, scroll 1.5 s a swipe).
+ */
+export function stepBudget(steps: object[]): number {
+  let ms = 0;
+  for (const raw of steps) {
+    const s = raw as Record<string, unknown>;
+    const num = (k: string, d = 0) => (typeof s[k] === "number" ? (s[k] as number) : d);
+    if (s.op === "wait_for" || s.op === "wait_gone" || s.op === "wait_idle") ms += num("timeout", 5000);
+    else if (s.op === "sleep" || s.op === "long_press") ms += num("ms", s.op === "sleep" ? 0 : 700);
+    else if (s.op === "scroll") ms += num("max", 10) * 1500;
+    ms += num("wait");
+  }
+  return ms;
+}
+
 export interface StepResult {
   op: string;
   ok: boolean;
@@ -56,16 +80,29 @@ export class Device {
   private agentLog = "";
   private starting?: Promise<void>;
 
-  async shell(cmd: string): Promise<string> {
+  /** Runs adb with a time limit; a timeout names the command instead of hanging. */
+  private async adbRun(args: string[], timeout = ADB_TIMEOUT_MS): Promise<string> {
+    try {
+      const { stdout } = await exec(this.adb, args, { maxBuffer: 16 << 20, timeout });
+      return stdout;
+    } catch (e) {
+      const err = e as Error & { killed?: boolean; signal?: string };
+      if (err.killed || err.signal === "SIGTERM") {
+        throw new Error(`adb ${args.filter((a) => a !== "-s" && a !== this.serial).join(" ").slice(0, 80)} timed out after ${timeout / 1000} s (is the device responsive? try \`adb devices\`)`);
+      }
+      throw err;
+    }
+  }
+
+  async shell(cmd: string, timeout = ADB_TIMEOUT_MS): Promise<string> {
     const serial = await this.getSerial();
-    const { stdout } = await exec(this.adb, ["-s", serial, "shell", cmd], { maxBuffer: 16 << 20 });
-    return stdout;
+    return this.adbRun(["-s", serial, "shell", cmd], timeout);
   }
 
   async getSerial(): Promise<string> {
     if (this.serial) return this.serial;
     const wanted = process.env.ANDROID_SERIAL;
-    const { stdout } = await exec(this.adb, ["devices"]);
+    const stdout = await this.adbRun(["devices"]);
     const ready = stdout
       .split("\n")
       .slice(1)
@@ -113,7 +150,7 @@ export class Device {
     const local = jarPath();
     const md5 = createHash("md5").update(readFileSync(local)).digest("hex");
     const remote = (await this.shell(`md5sum ${DEVICE_JAR} 2>/dev/null; true`)).split(/\s+/)[0];
-    if (remote !== md5) await exec(this.adb, ["-s", serial, "push", local, DEVICE_JAR]);
+    if (remote !== md5) await this.adbRun(["-s", serial, "push", local, DEVICE_JAR], PUSH_TIMEOUT_MS);
   }
 
   private async startAgent(): Promise<void> {
@@ -125,7 +162,7 @@ export class Device {
     await this.pushJar(serial);
     // After an agent crash the old forward still points at DEVICE_PORT; a new one would leak it.
     if (!this.port) {
-      const { stdout } = await exec(this.adb, ["-s", serial, "forward", "tcp:0", `tcp:${DEVICE_PORT}`]);
+      const stdout = await this.adbRun(["-s", serial, "forward", "tcp:0", `tcp:${DEVICE_PORT}`]);
       this.port = Number(stdout.trim());
     }
 
@@ -160,10 +197,25 @@ export class Device {
   /** Runs steps in one request. With `onResult`, the agent streams each step's result as it finishes. */
   async run(steps: object[], stopOnError = true, onResult?: (r: StepResult) => void): Promise<RunResult> {
     await this.ensureAgent();
+    const budget = RUN_BASE_MS + stepBudget(steps);
+    const signal = AbortSignal.timeout(budget);
+    try {
+      return await this.request(steps, stopOnError, onResult, signal);
+    } catch (e) {
+      if (!signal.aborted) throw e;
+      // The agent is wedged; drop it so the next call starts a fresh one.
+      this.agent?.kill();
+      this.agent = undefined;
+      throw new Error(`the agent did not answer within ${Math.round(budget / 1000)} s; it will be restarted on the next call`);
+    }
+  }
+
+  private async request(steps: object[], stopOnError: boolean, onResult: ((r: StepResult) => void) | undefined, signal: AbortSignal): Promise<RunResult> {
     const res = await fetch(`http://127.0.0.1:${this.port}/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ steps, stopOnError, stream: !!onResult }),
+      signal,
     });
     if (!res.ok) throw new Error(`agent error ${res.status}: ${await res.text()}`);
     if (!onResult) return (await res.json()) as RunResult;
@@ -196,7 +248,7 @@ export class Device {
 
   async screenshot(max: number, quality: number): Promise<Buffer> {
     await this.ensureAgent();
-    const res = await fetch(`http://127.0.0.1:${this.port}/screenshot?max=${max}&q=${quality}`);
+    const res = await fetch(`http://127.0.0.1:${this.port}/screenshot?max=${max}&q=${quality}`, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`screenshot failed: ${await res.text()}`);
     return Buffer.from(await res.arrayBuffer());
   }
@@ -204,7 +256,7 @@ export class Device {
   /** Crops of @refs from the latest observe, side by side in one JPEG. */
   async crops(refs: number[], size = 96): Promise<Buffer> {
     await this.ensureAgent();
-    const res = await fetch(`http://127.0.0.1:${this.port}/crops?refs=${refs.join(",")}&size=${size}&q=80`);
+    const res = await fetch(`http://127.0.0.1:${this.port}/crops?refs=${refs.join(",")}&size=${size}&q=80`, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`crops failed: ${await res.text()}`);
     return Buffer.from(await res.arrayBuffer());
   }
@@ -215,7 +267,7 @@ export class Device {
     if (this.serial && this.port) {
       try {
         // Sync on purpose: this also runs from the process "exit" handler.
-        execFileSync(this.adb, ["-s", this.serial, "forward", "--remove", `tcp:${this.port}`], { stdio: "ignore" });
+        execFileSync(this.adb, ["-s", this.serial, "forward", "--remove", `tcp:${this.port}`], { stdio: "ignore", timeout: 5000 });
       } catch {
         // Device already gone; nothing to clean up.
       }

@@ -32,6 +32,14 @@ apps on screen
 `connect(int)`). `FLAG_RETRIEVE_INTERACTIVE_WINDOWS` is added to the service info. Pattern taken
 from AOSP `cmds/uiautomator` and openatx/android-uiautomator-server-jar.
 
+## Timeouts
+
+Nothing waits forever. adb calls get 30 s (pushing the jar 2 min, `doctor`'s checks 10 s) and
+fail naming the command. A `/run` request gets 30 s plus what its steps ask for (`stepBudget`:
+`wait`, `timeout` with wait_for/wait_gone/wait_idle defaulting to 5 s, sleep and long_press `ms`,
+1.5 s per scroll swipe); past that the agent is killed and the next call starts a fresh one.
+Screenshots and crops get 20 s.
+
 ## Agent HTTP protocol
 
 Bound to 127.0.0.1 on the device; reached only through `adb forward`.

@@ -31,14 +31,14 @@ export async function doctor(): Promise<number> {
 
   const adb = adbPath();
   try {
-    const { stdout } = await exec(adb, ["version"]);
+    const { stdout } = await exec(adb, ["version"], { timeout: 10_000 });
     report("ok", `adb: ${stdout.split("\n")[0].trim()} (${adb})`);
   } catch {
     report("fail", "adb not found", "Install Android platform-tools, or set ANDROID_HOME.");
     return 1;
   }
 
-  const { stdout: devOut } = await exec(adb, ["devices"]);
+  const { stdout: devOut } = await exec(adb, ["devices"], { timeout: 10_000 });
   const devices = devOut
     .split("\n")
     .slice(1)
