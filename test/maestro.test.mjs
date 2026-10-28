@@ -91,7 +91,7 @@ name: login
 - assertNotVisible: Memuat
 - waitForAnimationToEnd
 - takeScreenshot: home
-- runFlow: other.yaml
+- evalScript: "output.x = 1"
 - stopApp
 `);
   assert.equal(out.name, "login");
@@ -117,7 +117,7 @@ name: login
   ]);
   assert.equal(skipped.length, 2);
   assert.match(skipped[0], /command 5: .*only absolute/);
-  assert.match(skipped[1], /command 20: .*runFlow/);
+  assert.match(skipped[1], /command 20: .*evalScript/);
 });
 
 test("export then import keeps the flow", () => {
@@ -133,10 +133,10 @@ test("import and export CLIs", async () => {
   const run = (...args) => promisify(execFile)("node", [resolve("dist/index.js"), ...args], { cwd: dir });
   try {
     const src = join(dir, "maestro-login.yaml");
-    await writeFile(src, "appId: com.app\n---\n- launchApp\n- tapOn: Masuk\n- runFlow: x.yaml\n");
+    await writeFile(src, "appId: com.app\n---\n- launchApp\n- tapOn: Masuk\n- evalScript: x\n");
     const imp = await run("import", src, "--name", "login");
     assert.match(imp.stdout, /saved .*login\.yaml \(2 steps\)/);
-    assert.match(imp.stderr, /runFlow/);
+    assert.match(imp.stderr, /evalScript/);
     assert.match(await readFile(join(dir, ".droidreplay", "flows", "login.yaml"), "utf8"), /tap: Masuk/);
     const out = await run("import", src, "--out", "elsewhere/login.yaml");
     assert.match(out.stdout, /saved .*elsewhere\/login\.yaml/);
@@ -202,5 +202,45 @@ test("Maestro regex text becomes /re/ and back; plain text and ${vars} stay lite
     { tapOn: "Search\\.\\.\\." }, // escaped, so Maestro matches the dots literally
     { tapOn: "${LABEL}" },
     { tapOn: "Rp ${AMOUNT} (paid)" },
+  ]);
+});
+
+test("runFlow maps to run_flow both ways: file, env, when and inline commands", () => {
+  const { out, skipped } = fromMaestro(`appId: com.app
+---
+- runFlow: shared/keypad-pin.yaml
+- runFlow:
+    file: shared/keypad-pin.yaml
+    env:
+      PIN: \${PIN}
+      PROMPT: Enter your PIN
+- runFlow:
+    when:
+      visible: Dismiss
+    commands:
+      - tapOn: Dismiss
+      - back
+- runFlow:
+    when:
+      true: \${CLEAR == 'true'}
+    commands:
+      - clearState
+- runFlow:
+    commands:
+      - tapOn: A
+      - evalScript: x
+`);
+  assert.deepEqual(out.steps, [
+    { run_flow: { file: "shared/keypad-pin.yaml" } },
+    { run_flow: { file: "shared/keypad-pin.yaml", vars: { PIN: "${PIN}", PROMPT: "Enter your PIN" } } },
+    { run_flow: { when: { visible: "Dismiss" }, steps: [{ tap: "Dismiss" }, { key: "back" }] } },
+  ]);
+  assert.match(skipped[0], /command 4: .*runFlow when true/);
+  assert.match(skipped[1], /command 5: .*commands 2: evalScript/);
+  const [, cmds] = commands(toMaestro(out, "com.app").out);
+  assert.deepEqual(cmds, [
+    { runFlow: "shared/keypad-pin.yaml" },
+    { runFlow: { file: "shared/keypad-pin.yaml", env: { PIN: "${PIN}", PROMPT: "Enter your PIN" } } },
+    { runFlow: { when: { visible: { text: "Dismiss" } }, commands: [{ tapOn: "Dismiss" }, "back"] } },
   ]);
 });

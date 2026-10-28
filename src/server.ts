@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { runAct, saveScreenshot } from "./act.js";
 import { Device, VERSION } from "./device.js";
-import { EVIDENCE_DIR, FLOWS_DIR, flowName, listFlows, loadFlow, patchSteps, substitute, Recorder, runFlow, saveFlow } from "./flow.js";
+import { EVIDENCE_DIR, flowName, FLOWS_DIR, fromCompact, listFlows, loadFlow, loadSubflow, patchSteps, Recorder, runFlow, saveFlow, substitute } from "./flow.js";
 
 /** Runs the MCP server on stdio until the client goes away. */
 export async function startServer(): Promise<void> {
@@ -44,7 +44,8 @@ export async function startServer(): Promise<void> {
         "Ops: tap, long_press{ms}, type{value, field?=its label, submit?, append?} (no target = focused),",
         "scroll{dir:down|up|left|right, until?:target, max?}, swipe{x1,y1,x2,y2,ms?}, key{key:back|home|enter|recents|delete|tab|<keycode>},",
         "wait_for{target, timeout?=5000}, wait_gone{target, timeout?}, wait_idle{quietMs?=300, timeout?}, sleep{ms},",
-        "launch{package}, stop_app{package}, clear_app{package} (wipe data), apps{filter?}, screenshot{name} (file name or path; saved, not shown), observe.",
+        "launch{package}, stop_app{package}, clear_app{package} (wipe data), apps{filter?}, screenshot{name} (file name or path; saved, not shown), observe,",
+        "run_flow{file? | steps?, vars?, when?:{visible|notVisible: target}}: a subflow (file relative to the flow), skipped when `when` fails.",
       ].join("\n"),
       inputSchema: {
         steps: z.array(z.object({ op: z.string() }).passthrough()).min(1),
@@ -58,6 +59,12 @@ export async function startServer(): Promise<void> {
           observeAfter: observe_after,
           evidenceDir,
           onSuccess: recorder && ((s, r) => recorder!.add(s, r)),
+          subflows: {
+            load: loadSubflow,
+            prepare: (raw, v) => substitute(raw.map(fromCompact), v),
+            vars: recorder?.vars ?? {},
+            dir: process.cwd(),
+          },
         }),
       ),
   );
@@ -125,9 +132,9 @@ export async function startServer(): Promise<void> {
           recorder = undefined;
           return text("recording discarded");
         case "run": {
-          const { flow } = await loadFlow(flowsDir, need(name));
+          const { path, flow } = await loadFlow(flowsDir, need(name));
           const out = evidence ? resolve(evidence) : evidenceDir;
-          return text((await runFlow(device, flow, { vars, evidenceDir: out, screenOnFailure: true })).text);
+          return text((await runFlow(device, flow, { vars, evidenceDir: out, dir: dirname(path), screenOnFailure: true })).text);
         }
         case "patch": {
           if (index === undefined || !steps) throw new Error("patch needs index and steps");

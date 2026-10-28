@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAct } from "../dist/act.js";
@@ -207,4 +207,54 @@ test("recording with vars saves ${var}, never the value", () => {
   assert.deepEqual(hideVars({ op: "tap", text: "a" }, {}), { op: "tap", text: "a" });
   // A longer value wins over one it contains.
   assert.deepEqual(hideVars({ op: "type", value: "123456" }, { A: "123", B: "123456" }), { op: "type", value: "${B}" });
+});
+
+test("run_flow: when gates an inline block, checked once without waiting", async () => {
+  const shown = new Set(["Dismiss"]);
+  const d = fakeDevice((s) =>
+    s.op === "wait_for" && s.timeout === 0
+      ? shown.has(s.text) ? { ok: true, out: "found" } : { ok: false, error: `timeout waiting for text="${s.text}"` }
+      : { ok: true, out: "done" },
+  );
+  const flow = {
+    name: "gate",
+    steps: [
+      { run_flow: { when: { visible: "Dismiss" }, steps: [{ tap: "Dismiss" }] } },
+      { run_flow: { when: { visible: "Allow" }, steps: [{ tap: "Allow" }] } },
+      { tap: "Home" },
+    ],
+  };
+  const run = await runFlow(d, flow, { evidenceDir: tmpdir() });
+  assert.ok(run.ok, run.text);
+  assert.match(run.text, /1\. ✓ run_flow \d+ms ran 1 steps/);
+  assert.match(run.text, /2\. ✓ run_flow \d+ms skipped \(when not met\)/);
+  const taps = d.batches.flat().filter((s) => s.op === "tap").map((s) => s.text);
+  assert.deepEqual(taps, ["Dismiss", "Home"]);
+  assert.ok(d.batches.flat().some((s) => s.op === "wait_for" && s.text === "Allow" && s.timeout === 0));
+});
+
+test("run_flow: a file next to the flow, its vars on top of the caller's, and inner failures named", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "droidreplay-"));
+  try {
+    await mkdir(join(dir, "shared"));
+    await writeFile(join(dir, "shared", "pin.yaml"), 'name: pin\nsteps:\n  - tap: {text: "${PIN}", below: "${PROMPT}"}\n  - tap: "${PIN}x"\n');
+    const flow = { name: "login", steps: [{ run_flow: { file: "shared/pin", vars: { PROMPT: "Enter PIN" } } }] };
+    const d = fakeDevice((s) => (s.text === "123456x" ? { ok: false, error: 'not found: text="123456x"' } : { ok: true, out: "done" }));
+    const run = await runFlow(d, flow, { evidenceDir: dir, dir, vars: { PIN: "123456" } });
+    assert.equal(run.failedStep, 1);
+    assert.match(run.text, /run_flow \d+ms step 2 \(tap\) failed: not found: text="123456x"/);
+    assert.deepEqual(d.batches.flat()[0], { op: "tap", text: "123456", below: "Enter PIN", wait: 5000 });
+
+    // A flow that runs itself stops instead of looping forever.
+    await writeFile(join(dir, "loop.yaml"), "name: loop\nsteps:\n  - run_flow: {file: loop.yaml}\n");
+    const loop = await runFlow(fakeDevice(), { name: "l", steps: [{ run_flow: { file: "loop.yaml" } }] }, { evidenceDir: dir, dir });
+    assert.match(loop.text, /nested more than 8 deep/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("substitute leaves a run_flow's own steps for later, with its own vars", () => {
+  const out = substitute([{ op: "run_flow", vars: { A: "${X}" }, steps: [{ tap: "${A}" }] }], { X: "1" });
+  assert.deepEqual(out, [{ op: "run_flow", vars: { A: "1" }, steps: [{ tap: "${A}" }] }]);
 });

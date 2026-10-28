@@ -36,8 +36,8 @@ or may not be kept, dev-build overlays) to be imported or recorded and replayed 
 - [x] `clear_app` (Maestro `clearState`) to start from a fresh install state
 - [x] Position selectors `below` / `above` / `leftOf` / `rightOf`, also for unlabeled icons
 - [x] Regex text (`"/A|B/"`), for waits on one of several screens and partly known text
-- [ ] Conditional steps (`when: visible / not visible`) for screens that only sometimes appear
-- [ ] Subflows with parameters (`run_flow{file, vars}`), e.g. a shared PIN keypad flow
+- [x] Conditional steps (`when: visible / not visible`) for screens that only sometimes appear
+- [x] Subflows with parameters (`run_flow{file, vars}`), e.g. a shared PIN keypad flow
 - [ ] `repeat while visible`, `hide_keyboard`, `index` selector, tags to include/exclude flows
 
 ## Quality
