@@ -11,7 +11,7 @@ record once, replay without a model (`flow` tool and `moreplay run`).
 ## Keep the docs current
 
 **Every change that alters behavior, layout, commands, or plans must update the docs in the
-same PR**: this file, `docs/architecture.md`, `docs/roadmap.md`, and `README.md` where
+same PR**: this file, `docs/architecture.md`, `docs/reference/`, `docs/roadmap.md`, and `README.md` where
 relevant. A new session should be able to read this file and know the current state without
 digging through git history. If a doc says something the code no longer does, fix the doc.
 
@@ -27,6 +27,8 @@ digging through git history. If a doc says something the code no longer does, fi
   - `index.ts`: CLI entry (`moreplay` = MCP server, `doctor`, `run`, `export`, `import`, `--version`, `--help`).
   - `server.ts`: MCP tool registration (`observe`, `act`, `screenshot`, `flow`), the active
     recorder, and process lifecycle.
+  - `help.ts`: the MCP `instructions` sent on connect, and `flow {action: "help", name}`, which
+    serves `docs/reference/<topic>.md`.
   - `flow.ts`: flow YAML format (short form `- tap: Masuk`), recording (refs -> the selector the
     agent reports), `${var}` substitution, implicit waits, `runFlow`, `patchSteps`.
   - `run-cli.ts`: `moreplay run <flow|folder>... [--var k=v] [--evidence dir] [--include-tags]
@@ -49,7 +51,10 @@ digging through git history. If a doc says something the code no longer does, fi
   covers both directions, a round trip, and the export/import CLIs; `report.test.mjs` covers
   step labels, plain/colored output and the suite summary.
 - `assets/moreplay.jar`: copy of the built jar that ships in the npm package (gitignored).
-- `docs/architecture.md`: how the pieces talk, the agent protocol, the step format.
+- `docs/architecture.md`: how the pieces talk, the agent protocol, the step format (internal).
+- `docs/reference/`: user-facing reference (steps, selectors, flows, cli). Ships in the npm
+  package and is what `flow help` returns, so a behavior change updates it too; it is also
+  meant to become the website's reference pages.
 - `docs/roadmap.md`: what is done, what is next. Update it when a roadmap item lands.
 - `spike/`: benchmark scripts and `RESULTS.md` (measurements vs `uiautomator dump`/mobilecli).
   `mcp-test.mjs` taps the calculator (changes its state); `bench.mjs` is read-only;

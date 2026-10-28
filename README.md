@@ -224,7 +224,11 @@ What your AI app gets:
 | `observe` | Reads the screen as text, one line per button, text or field. |
 | `act` | Runs a list of steps in one go: tap, type, scroll, wait, press a key, open an app, a deep link, install an APK, grant permissions or wipe an app's data, read the app's logs, take a screenshot. When a step fails because the app crashed, the crash comes with it. Stops at the first step that fails and shows the screen. |
 | `screenshot` | Saves a picture of the screen. The AI only looks at it when it asks to. |
-| `flow` | Records steps, saves them as a flow, runs a saved flow, and fixes a broken step. |
+| `flow` | Records steps, saves them as a flow, runs a saved flow, and fixes a broken step. Also serves the full reference to the AI (`help`), so it can look up selectors or the flow format when it needs them. |
+
+The full reference for people is in [docs/reference](docs/reference): [steps](docs/reference/steps.md),
+[selectors](docs/reference/selectors.md), [flows](docs/reference/flows.md) and the
+[command line](docs/reference/cli.md).
 
 ## How fast
 

@@ -8,6 +8,7 @@
     "moreplay": "dist/index.js"
   },
   "files": [
+    "docs/reference",
     "dist",
     "assets",
     "README.md",

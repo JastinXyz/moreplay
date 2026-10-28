@@ -54,3 +54,22 @@ test("act refuses a ${var} it has no value for, before touching a device", async
     await client.close();
   }
 });
+
+// Instructions and help reach the model without a device.
+test("instructions point to flow help, and help serves each reference topic", async () => {
+  const client = new Client({ name: "test", version: "0" });
+  await client.connect(new StdioClientTransport({ command: "node", args: ["dist/index.js"] }));
+  try {
+    assert.match(client.getInstructions() ?? "", /flow \{action: "help"/);
+    const call = (name) => client.callTool({ name: "flow", arguments: { action: "help", ...(name ? { name } : {}) } });
+    assert.match((await call()).content[0].text, /selectors: /);
+    for (const [topic, heading] of [["steps", "# Steps"], ["selectors", "# Selectors"], ["flows", "# Flows"], ["cli", "# Command line"]]) {
+      assert.match((await call(topic)).content[0].text, new RegExp(`^${heading}`), topic);
+    }
+    const bad = await call("nope");
+    assert.ok(bad.isError);
+    assert.match(bad.content[0].text, /no help topic "nope"/);
+  } finally {
+    await client.close();
+  }
+});
